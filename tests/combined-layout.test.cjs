@@ -37,13 +37,14 @@ test('moves the lyric only as far as needed when neither side fits', () => {
   assert.ok(Math.abs(fitted.y - lyric.y) <= panelDimensions(settings).height + 8);
 });
 
-test('control panel and lyric scale together without changing the lyric anchor', () => {
+test('large lyrics keep the panel at a readable size without scaling its controls', () => {
   const lyric = { x: 400, y: 650, width: 1260, height: 112 };
   const scaled = { ...settings, scale: 140, width: 900 };
   const layout = combinedLayout(lyric, scaled, 'above', 1);
   assert.equal(layout.window.y + layout.lyric.y, lyric.y);
-  assert.equal(layout.panel.width, lyric.width);
-  assert.equal(layout.panel.height, Math.round(260 * 1.4));
+  assert.equal(layout.panel.width, 720);
+  assert.equal(layout.panel.height, 420);
+  assert.equal(layout.panel.contentScale, 1);
 });
 
 test('at small lyric sizes the control stays full width with readable minimum scale', () => {
@@ -51,9 +52,27 @@ test('at small lyric sizes the control stays full width with readable minimum sc
   const lyric = { x: 100, y: 600, width: 560, height: 64 };
   const panel = panelDimensions(small);
   assert.equal(panel.width, lyric.width);
-  assert.equal(panel.height, 260);
+  assert.equal(panel.height, 420);
   assert.equal(panel.contentScale, 1);
   const layout = combinedLayout(lyric, small, 'above', 1);
   assert.equal(layout.window.width, lyric.width);
   assert.equal(layout.panel.width, layout.lyric.width);
+});
+
+test('very small lyrics keep a minimum readable panel width and centered anchor', () => {
+  const small = { ...settings, scale: 70, width: 480 };
+  const lyric = { x: 100, y: 600, width: 336, height: 56 };
+  const layout = combinedLayout(lyric, small, 'above', 1);
+  assert.equal(layout.panel.width, 560);
+  assert.equal(layout.window.x + layout.lyric.x, lyric.x);
+  assert.equal(layout.window.x + layout.panel.x + layout.panel.width / 2, lyric.x + lyric.width / 2);
+});
+
+test('a wider panel stays on screen near the display edge without moving lyrics', () => {
+  const small = { ...settings, scale: 70, width: 480 };
+  const lyric = { x: 20, y: 600, width: 336, height: 56 };
+  const layout = combinedLayout(lyric, small, 'above', 1, screen);
+  assert.equal(layout.window.x, 0);
+  assert.equal(layout.window.x + layout.lyric.x, lyric.x);
+  assert.equal(layout.window.x + layout.window.width <= screen.width, true);
 });

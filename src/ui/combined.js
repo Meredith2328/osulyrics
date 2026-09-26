@@ -92,20 +92,49 @@ function setEditing(value) {
 function renderTrack() {
   const song = state.song;
   $('trackTitle').textContent = song?.title || '等待歌曲';
+  $('trackTitle').title = song?.title || '';
   $('trackArtist').textContent = song?.artist || '播放后自动识别';
+  $('trackArtist').title = song?.artist || '';
   const phase = /^select/i.test(state.state || '') ? '选歌预览' : /^play$/i.test(state.state || '') ? '游玩中' : state.state || '等待 osu!';
   $('phaseBadge').textContent = state.connected ? phase : '等待 osu!';
   for (const id of ['searchButton', 'importButton', 'editButton', 'offsetBack', 'offsetForward']) $(id).disabled = !song;
 }
 
 function renderStatus() {
-  $('sourceLabel').textContent = `歌词来源：${lyrics.source || (state.song ? '查找中' : '等待歌曲')}`;
-  $('translationLabel').textContent = lyrics.translationSource || '';
   $('offsetValue').textContent = `${((lyrics.offsetMs || 0) / 1000).toFixed(1)}s`;
-  const message = (tosu.status !== 'connected' && tosu.message) || (lyrics.message?.startsWith('歌词搜索失败') ? lyrics.message : '');
-  $('notice').hidden = !message;
-  $('notice').textContent = message;
-  $('setupPanel').hidden = tosu.status === 'connected';
+  const connected = tosu.status === 'connected' && state.connected;
+  let status = lyrics.status || 'idle';
+  let label = '等待歌曲';
+  let detail = '在 osu! 中选择歌曲后自动查找歌词';
+  if (!connected) {
+    status = 'idle';
+    label = '等待 osu! 连接';
+    detail = tosu.message || '连接后读取歌曲与播放时间';
+  } else if (state.song) {
+    if (status === 'ready') {
+      label = '歌词已就绪';
+      detail = [lyrics.source, lyrics.translationSource].filter(Boolean).join(' · ') || '同步歌词已加载';
+    } else if (status === 'searching' || status === 'loading') {
+      label = lyrics.lines?.length ? '正在搜索其他歌词版本' : '正在查找同步歌词';
+      detail = lyrics.lines?.length ? '当前歌词继续显示' : '按曲名、歌手和时长匹配';
+    } else if (status === 'choose') {
+      label = lyrics.candidates?.length ? '请选择歌词版本' : '未找到同步歌词';
+      detail = lyrics.message || '可重搜或导入本地 LRC';
+    } else if (status === 'error') {
+      label = '歌词获取失败';
+      detail = lyrics.message || '可重试搜索或导入本地 LRC';
+    }
+  }
+  $('lyricState').dataset.status = status;
+  $('sourceLabel').textContent = label;
+  $('translationLabel').textContent = detail;
+  $('translationLabel').title = detail;
+  $('normalView').classList.toggle('needs-lyrics', connected && !lyrics.lines?.length && (status === 'choose' || status === 'error'));
+  $('setupPanel').hidden = connected;
+  if (!connected) {
+    $('searchRow').hidden = true;
+    $('actionRow').hidden = true;
+  } else if ($('searchRow').hidden) $('actionRow').hidden = false;
   $('setupDescription').textContent = tosu.status === 'waiting-osu' ? '打开 osu!lazer 后自动连接' : '需要本机 tosu 读取歌曲';
   const setupButton = $('setupButton');
   if (tosu.status === 'waiting-osu') { setupButton.textContent = '已启动'; setupButton.disabled = true; }
@@ -114,8 +143,9 @@ function renderStatus() {
 }
 
 function renderControls() {
-  $('lockButton').textContent = locked ? '解锁调整' : '锁定歌词';
+  $('lockButton').textContent = locked ? '解锁歌词' : '锁定歌词';
   $('lockButton').classList.toggle('selected', locked);
+  $('lockButton').setAttribute('aria-pressed', String(locked));
   $('styleButton').disabled = locked;
   $('visibilityButton').textContent = shown ? '隐藏歌词' : '显示歌词';
   if (locked && view === 'style') setView('normal');
@@ -132,8 +162,10 @@ function renderStyle() {
   $('lyricBox').classList.add(`theme-${settings.theme}`);
   $('translation').hidden = !settings.showTranslation || !$('translation').textContent;
   $('scaleValue').textContent = `${settings.scale}%`;
-  $('opacityRange').value = settings.opacity;
-  $('opacityValue').textContent = `${settings.opacity}%`;
+  const transparency = 100 - settings.opacity;
+  $('opacityRange').value = transparency;
+  $('opacityRange').style.setProperty('--fill', `${(transparency - 5) / 95 * 100}%`);
+  $('opacityValue').textContent = `${transparency}%`;
   $('opacityRange').disabled = settings.theme === 'plain';
   $('themeSelect').value = settings.theme;
   $('translationToggle').checked = settings.showTranslation;
@@ -266,7 +298,7 @@ $('backStyle').addEventListener('click', () => setView('normal'));
 $('resetStyle').addEventListener('click', () => api.updateOverlaySettings({ scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true }));
 $('scaleBack').addEventListener('click', () => api.updateOverlaySettings({ scale: settings.scale - 5 }));
 $('scaleForward').addEventListener('click', () => api.updateOverlaySettings({ scale: settings.scale + 5 }));
-$('opacityRange').addEventListener('input', event => api.updateOverlaySettings({ opacity: Number(event.target.value) }));
+$('opacityRange').addEventListener('input', event => api.updateOverlaySettings({ opacity: 100 - Number(event.target.value) }));
 $('themeSelect').addEventListener('change', event => api.updateOverlaySettings({ theme: event.target.value }));
 $('translationToggle').addEventListener('change', event => api.updateOverlaySettings({ showTranslation: event.target.checked }));
 $('offsetBack').addEventListener('click', () => api.offset(-500));
@@ -274,11 +306,13 @@ $('offsetForward').addEventListener('click', () => api.offset(500));
 $('importButton').addEventListener('click', () => api.importLyrics());
 $('editButton').addEventListener('click', () => api.editLyrics());
 $('searchButton').addEventListener('click', () => {
-  $('searchRow').hidden = !$('searchRow').hidden;
-  $('normalView').classList.toggle('search-open', !$('searchRow').hidden);
-  if (!$('searchRow').hidden) $('searchInput').focus();
+  $('actionRow').hidden = true;
+  $('searchRow').hidden = false;
+  $('searchInput').focus();
 });
-function submitSearch() { showCandidatesAfterSearch = true; api.searchLyrics($('searchInput').value.trim()); }
+function closeSearch() { $('searchRow').hidden = true; $('actionRow').hidden = false; }
+$('cancelSearch').addEventListener('click', closeSearch);
+function submitSearch() { showCandidatesAfterSearch = true; closeSearch(); api.searchLyrics($('searchInput').value.trim()); }
 $('submitSearch').addEventListener('click', submitSearch);
 $('searchInput').addEventListener('keydown', event => { if (event.key === 'Enter') submitSearch(); });
 $('backCandidates').addEventListener('click', () => setView('normal'));
@@ -294,6 +328,7 @@ api.onState(next => {
   if (state.song?.key !== next.song?.key || state.state !== next.state || state.connected !== next.connected) activeIndex = -2;
   state = next;
   renderTrack();
+  renderStatus();
   renderLyrics();
 });
 api.onLyrics(next => {

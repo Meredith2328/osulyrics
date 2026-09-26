@@ -11,34 +11,36 @@
   <div id="panelClip" class="panel-clip" hidden>
     <div id="panelSurface" class="panel-surface">
       <header class="panel-header">
-        <div class="identity"><span class="brand-dot">♪</span><span class="brand-name">lyrics</span><span id="phaseBadge" class="phase-badge">等待 osu!</span></div>
+        <div class="identity"><span class="brand-dot">♪</span><span class="brand-name">lyrics</span></div>
         <div class="header-actions"><button id="collapseButton" class="icon-button" title="收起设置" aria-label="收起设置">⌃</button><button id="closeButton" class="icon-button close" title="退出" aria-label="退出">×</button></div>
       </header>
 
       <section id="normalView" class="panel-view normal-view">
-        <div class="section-kicker">NOW PLAYING<span class="kicker-line"></span></div>
-        <div class="track-row"><strong id="trackTitle">等待歌曲</strong><span id="trackArtist">播放后自动识别</span></div>
+        <div class="track-block"><h1 id="trackTitle">等待歌曲</h1><div class="track-meta"><span id="trackArtist">播放后自动识别</span><span id="phaseBadge" class="phase-label">等待 osu!</span></div></div>
         <div class="timeline"><span id="elapsed">0:00</span><div class="progress-track"><div id="progress" class="progress-fill"></div></div><span id="duration">--:--</span></div>
-        <div class="source-row"><span id="sourceLabel">歌词来源：等待歌曲</span><span id="translationLabel"></span></div>
-        <div id="notice" class="notice" hidden></div>
-        <div id="setupPanel" class="setup-panel" hidden><span id="setupDescription">连接 tosu 后读取歌曲</span><button id="setupButton" class="mini-accent">启动</button></div>
-        <div class="action-grid"><button id="searchButton" class="osu-action purple">搜索歌词</button><button id="importButton" class="osu-action blue">导入 LRC</button><button id="editButton" class="osu-action pink">编辑歌词</button></div>
-        <div id="searchRow" class="search-row" hidden><input id="searchInput" type="search" placeholder="曲名或歌手"><button id="submitSearch" class="mini-accent">搜索</button></div>
-        <div class="tool-row"><button id="lockButton" class="tool-button">锁定歌词</button><button id="styleButton" class="tool-button">外观</button><button id="visibilityButton" class="tool-button">隐藏歌词</button></div>
-        <div class="offset-row"><span>歌词校时</span><div class="stepper"><button id="offsetBack" aria-label="歌词提前半秒">−</button><output id="offsetValue">0.0s</output><button id="offsetForward" aria-label="歌词延后半秒">＋</button></div></div>
+        <div id="lyricState" class="lyric-state" data-status="idle"><span class="status-dot"></span><div class="status-copy"><strong id="sourceLabel">等待歌曲</strong><span id="translationLabel" class="status-detail"></span></div></div>
+        <div class="action-slot">
+          <div id="actionRow" class="action-row"><button id="searchButton" class="action-button action-search">搜索歌词</button><button id="importButton" class="action-button">导入 LRC</button><button id="editButton" class="quiet-button">编辑歌词</button></div>
+          <div id="searchRow" class="search-row" hidden><input id="searchInput" type="search" placeholder="输入曲名或歌手"><button id="submitSearch" class="action-button primary">搜索</button><button id="cancelSearch" class="quiet-button">取消</button></div>
+          <div id="setupPanel" class="setup-panel" hidden><span id="setupDescription">连接 tosu 后读取歌曲</span><button id="setupButton" class="action-button primary">启动</button></div>
+        </div>
+        <div class="control-row"><button id="lockButton" class="control-button">锁定歌词</button><button id="visibilityButton" class="control-button">隐藏歌词</button><button id="styleButton" class="control-button control-next">歌词外观<span aria-hidden="true">›</span></button></div>
+        <div class="offset-row"><div class="offset-label"><strong>歌词校时</strong><small>− 提前 0.5 秒 · ＋ 延后 0.5 秒</small></div><div class="stepper"><button id="offsetBack" aria-label="歌词提前半秒">−</button><output id="offsetValue">0.0s</output><button id="offsetForward" aria-label="歌词延后半秒">＋</button></div></div>
       </section>
 
       <section id="styleView" class="panel-view style-view" hidden>
-        <div class="view-heading"><div><div class="section-kicker">APPEARANCE</div><strong>悬浮歌词外观</strong></div><button id="backStyle" class="back-button">返回</button></div>
-        <div class="style-row"><span>整体大小</span><div class="stepper large"><button id="scaleBack">−</button><output id="scaleValue">100%</output><button id="scaleForward">＋</button></div></div>
-        <div class="style-row"><span>背景透明度</span><input id="opacityRange" type="range" min="0" max="95" step="1"><output id="opacityValue">0%</output></div>
-        <div class="style-row"><span>样式</span><select id="themeSelect"><option value="plain">纯文字</option><option value="glass">柔雾</option><option value="contrast">高对比</option></select></div>
-        <div class="style-row"><span>中文翻译</span><label class="switch"><input id="translationToggle" type="checkbox" checked><span class="switch-track"></span></label></div>
-        <div class="style-footer"><span>拖动歌词移动 · 拖动边缘等比缩放</span><button id="resetStyle">恢复默认</button></div>
+        <div class="view-heading"><button id="backStyle" class="back-button">‹ 返回</button><h1>歌词外观</h1></div>
+        <div class="settings-list">
+          <div class="setting-row"><label>歌词大小</label><div class="setting-control"><div class="stepper large"><button id="scaleBack" aria-label="缩小歌词">−</button><output id="scaleValue">100%</output><button id="scaleForward" aria-label="放大歌词">＋</button></div></div></div>
+          <div class="setting-row"><label for="opacityRange">背景透明度</label><div class="setting-control range-control"><input id="opacityRange" type="range" min="5" max="100" step="1" title="100% 表示完全透明；纯文字样式没有背景"><output id="opacityValue">100%</output></div></div>
+          <div class="setting-row"><label for="themeSelect">歌词样式</label><div class="setting-control"><select id="themeSelect"><option value="plain">纯文字</option><option value="glass">柔雾</option><option value="contrast">高对比</option></select></div></div>
+          <div class="setting-row"><label for="translationToggle">中文翻译</label><div class="setting-control"><label class="switch"><input id="translationToggle" type="checkbox" checked><span class="switch-track"></span></label></div></div>
+        </div>
+        <div class="style-footer"><span>拖动歌词移动位置；拖动边缘等比缩放</span><button id="resetStyle">恢复默认</button></div>
       </section>
 
       <section id="candidateView" class="panel-view candidate-view" hidden>
-        <div class="view-heading"><div><div class="section-kicker">MATCHING</div><strong>选择歌词版本</strong></div><button id="backCandidates" class="back-button">返回</button></div>
+        <div class="view-heading"><button id="backCandidates" class="back-button">‹ 返回</button><h1>选择歌词版本</h1></div>
         <div id="candidateList" class="candidate-list"></div>
         <div class="page-row"><button id="previousPage">上一页</button><span id="pageLabel">1 / 1</span><button id="nextPage">下一页</button></div>
       </section>

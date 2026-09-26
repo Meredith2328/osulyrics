@@ -1,12 +1,11 @@
 const { overlayDimensions } = require('./overlay-settings.cjs');
 
 function panelDimensions(settings) {
-  const contentScale = Math.max(1, settings.scale / 100);
   return {
-    width: overlayDimensions(settings).width,
-    height: Math.round(260 * contentScale),
-    gap: Math.round(8 * contentScale),
-    contentScale,
+    width: Math.max(560, Math.min(720, overlayDimensions(settings).width)),
+    height: 420,
+    gap: 8,
+    contentScale: 1,
   };
 }
 
@@ -29,19 +28,23 @@ function fitLyricForPanel(lyric, area, settings, side) {
   return { ...lyric, y: Math.round(Math.max(area.y, Math.min(y, area.y + area.height - lyric.height))) };
 }
 
-function combinedLayout(lyric, settings, side, progress) {
+function combinedLayout(lyric, settings, side, progress, area = null) {
   const panel = panelDimensions(settings);
   const amount = Math.max(0, Math.min(1, progress));
   const visiblePanelHeight = Math.round(panel.height * amount);
   const gap = Math.round(panel.gap * amount);
   const width = Math.max(lyric.width, panel.width);
-  const lyricX = Math.round((width - lyric.width) / 2);
+  const centeredX = Math.round(lyric.x + lyric.width / 2 - width / 2);
+  const windowX = area && width <= area.width
+    ? Math.max(area.x, Math.min(centeredX, area.x + area.width - width))
+    : centeredX;
+  const lyricX = lyric.x - windowX;
   const panelX = Math.round((width - panel.width) / 2);
   const above = side === 'above';
   const lyricY = above ? visiblePanelHeight + gap : 0;
   return {
     window: {
-      x: Math.round(lyric.x + lyric.width / 2 - width / 2),
+      x: windowX,
       y: above ? lyric.y - visiblePanelHeight - gap : lyric.y,
       width,
       height: lyric.height + visiblePanelHeight + gap,
