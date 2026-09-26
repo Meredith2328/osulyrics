@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { panelDimensions, choosePanelSide, fitLyricForPanel, combinedLayout } = require('../src/combined-layout.cjs');
+const { panelDimensions, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout } = require('../src/combined-layout.cjs');
 
 const settings = { scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true };
 const screen = { x: 0, y: 0, width: 1920, height: 900 };
@@ -75,4 +75,34 @@ test('a wider panel stays on screen near the display edge without moving lyrics'
   assert.equal(layout.window.x, 0);
   assert.equal(layout.window.x + layout.lyric.x, lyric.x);
   assert.equal(layout.window.x + layout.window.width <= screen.width, true);
+});
+
+test('panel border resizing changes both panel dimensions while retaining readable limits', () => {
+  assert.deepEqual(scaledPanelSize({ width: 560, height: 420 }, 1.1), { width: 616, height: 462 });
+  assert.deepEqual(scaledPanelSize({ width: 560, height: 420 }, .5), { width: 500, height: 370 });
+  const custom = { width: 616, height: 462 };
+  const layout = combinedLayout({ x: 400, y: 650, width: 616, height: 88 }, settings, 'above', 1, screen, custom);
+  assert.equal(layout.panel.width, 616);
+  assert.equal(layout.panel.height, 462);
+  assert.equal(layout.window.y + layout.lyric.y, 650);
+});
+
+test('top and bottom panel borders keep the opposite panel edge fixed', () => {
+  const lyric = { x: 20, y: 695, width: 560, height: 64 };
+  const panel = { width: 560, height: 420 };
+  const enlarged = { width: 616, height: 462 };
+  const dimensions = { width: 616, height: 70 };
+  const oldTop = lyric.y - panel.height - 8;
+  const oldBottom = lyric.y - 8;
+  const fromTop = panelResizedLyricBounds(lyric, panel, dimensions, enlarged, 'top', 'above');
+  const fromBottom = panelResizedLyricBounds(lyric, panel, dimensions, enlarged, 'bottom', 'above');
+  assert.equal(fromTop.y - 8, oldBottom);
+  assert.equal(fromBottom.y - enlarged.height - 8, oldTop);
+  const below = { ...lyric, y: 40 };
+  const belowTop = below.y + below.height + 8;
+  const belowBottom = belowTop + panel.height;
+  const fromBelowTop = panelResizedLyricBounds(below, panel, dimensions, enlarged, 'top', 'below');
+  const fromBelowBottom = panelResizedLyricBounds(below, panel, dimensions, enlarged, 'bottom', 'below');
+  assert.equal(fromBelowTop.y + fromBelowTop.height + 8 + enlarged.height, belowBottom);
+  assert.equal(fromBelowBottom.y + fromBelowBottom.height + 8, belowTop);
 });

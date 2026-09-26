@@ -49,7 +49,7 @@ function styleBoundsAtAnchor(anchor, dimensions) {
   };
 }
 
-function resizeFromHandle(bounds, settings, startPointer, pointer, handle) {
+function resizeRatioFromHandle(bounds, startPointer, pointer, handle) {
   const dx = pointer.x - startPointer.x;
   const dy = pointer.y - startPointer.y;
   const left = handle.includes('left');
@@ -58,23 +58,35 @@ function resizeFromHandle(bounds, settings, startPointer, pointer, handle) {
   const bottom = handle.includes('bottom');
   const horizontalDelta = left ? -dx / bounds.width : right ? dx / bounds.width : 0;
   const verticalDelta = top ? -dy / bounds.height : bottom ? dy / bounds.height : 0;
-  const ratio = Math.abs(horizontalDelta) >= Math.abs(verticalDelta) ? horizontalDelta : verticalDelta;
+  return Math.abs(horizontalDelta) >= Math.abs(verticalDelta) ? horizontalDelta : verticalDelta;
+}
+
+function boundsAtDimensions(bounds, dimensions, handle) {
+  const left = handle.includes('left');
+  const right = handle.includes('right');
+  const top = handle.includes('top');
+  const bottom = handle.includes('bottom');
+  const width = dimensions.width;
+  const height = dimensions.height;
+  return {
+    x: left ? bounds.x + bounds.width - width : right ? bounds.x : Math.round(bounds.x + (bounds.width - width) / 2),
+    y: top ? bounds.y + bounds.height - height : bottom ? bounds.y : Math.round(bounds.y + (bounds.height - height) / 2),
+    width,
+    height,
+  };
+}
+
+function resizeFromHandle(bounds, settings, startPointer, pointer, handle) {
+  const ratio = resizeRatioFromHandle(bounds, startPointer, pointer, handle);
   const next = normalizeOverlaySettings({
     ...settings,
     scale: settings.scale * (1 + ratio),
   });
   const dimensions = overlayDimensions(next);
-  const width = dimensions.width;
-  const height = dimensions.height;
   return {
     settings: next,
-    bounds: {
-      x: left ? bounds.x + bounds.width - width : right ? bounds.x : Math.round(bounds.x + (bounds.width - width) / 2),
-      y: top ? bounds.y + bounds.height - height : bottom ? bounds.y : Math.round(bounds.y + (bounds.height - height) / 2),
-      width,
-      height,
-    },
+    bounds: boundsAtDimensions(bounds, dimensions, handle),
   };
 }
 
-module.exports = { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeFromHandle };
+module.exports = { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, boundsAtDimensions, resizeFromHandle };

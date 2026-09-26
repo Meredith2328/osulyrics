@@ -11,6 +11,7 @@ test('saves appearance, position and lock state for the next launch', () => {
   const config = {
     overlayBounds: { x: 120, y: 460, width: 700, height: 126 },
     overlaySettings: { scale: 135, width: 820, opacity: 40, theme: 'contrast', showTranslation: false },
+    panelSize: { width: 812, height: 487 },
     overlayLocked: true,
     overlayShown: false,
     panelOpen: true,
@@ -22,6 +23,7 @@ test('saves appearance, position and lock state for the next launch', () => {
   assert.equal(loadWindowConfig(file).overlayLocked, false);
   assert.equal(loadWindowConfig(file).overlayShown, false);
   assert.equal(loadWindowConfig(file).panelOpen, true);
+  assert.deepEqual(loadWindowConfig(file).panelSize, { width: 812, height: 487 });
 });
 
 test('a missing or corrupt config falls back safely', () => {

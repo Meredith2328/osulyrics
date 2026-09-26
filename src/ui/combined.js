@@ -146,6 +146,8 @@ function renderControls() {
   $('lockButton').textContent = locked ? '解锁歌词' : '锁定歌词';
   $('lockButton').classList.toggle('selected', locked);
   $('lockButton').setAttribute('aria-pressed', String(locked));
+  $('panelHeader').classList.toggle('drag-locked', locked);
+  $('panelSurface').classList.toggle('locked', locked);
   $('styleButton').disabled = locked;
   $('visibilityButton').textContent = shown ? '隐藏歌词' : '显示歌词';
   if (locked && view === 'style') setView('normal');
@@ -213,6 +215,8 @@ function applyLayout(layout) {
   clip.style.height = `${panel.visibleHeight}px`;
   $('panelSurface').style.top = layout.side === 'above' ? `${panel.visibleHeight - panel.height}px` : '0px';
   $('panelSurface').style.width = `${panel.width / panel.contentScale}px`;
+  $('panelSurface').style.height = `${panel.height / panel.contentScale}px`;
+  $('panelSurface').classList.toggle('compact', panel.height < 410);
   document.documentElement.style.setProperty('--panel-scale', String(panel.contentScale));
   const box = $('lyricBox');
   const widthChanged = box.style.width !== `${layout.lyric.width}px`;
@@ -238,6 +242,82 @@ let pointerId = null;
 let gestureMode = null;
 let gestureOrigin = null;
 let moved = false;
+let panelPointerId = null;
+let panelGestureOrigin = null;
+let panelDragActive = false;
+let panelMoved = false;
+let panelResizePointerId = null;
+let panelResizeOrigin = null;
+let panelResizeTarget = null;
+let panelResizeActive = false;
+let panelResizeMoved = false;
+
+function finishPanelDrag() {
+  const header = $('panelHeader');
+  const id = panelPointerId;
+  panelPointerId = null;
+  if (id !== null && header.hasPointerCapture(id)) header.releasePointerCapture(id);
+  if (panelDragActive) api.overlayDragEnd();
+  panelDragActive = false;
+  panelGestureOrigin = null;
+  panelMoved = false;
+  header.classList.remove('dragging');
+}
+
+$('panelHeader').addEventListener('pointerdown', async event => {
+  if (locked || event.button !== 0 || event.target.closest('button')) return;
+  event.preventDefault();
+  panelPointerId = event.pointerId;
+  panelGestureOrigin = { x: event.screenX, y: event.screenY };
+  panelMoved = false;
+  const header = $('panelHeader');
+  header.setPointerCapture(panelPointerId);
+  const started = await api.overlayDragStart(panelGestureOrigin);
+  if (panelPointerId !== event.pointerId || !started) { finishPanelDrag(); return; }
+  panelDragActive = true;
+  header.classList.add('dragging');
+});
+$('panelHeader').addEventListener('pointermove', event => {
+  if (panelPointerId !== event.pointerId || !panelDragActive) return;
+  if (Math.abs(event.screenX - panelGestureOrigin.x) + Math.abs(event.screenY - panelGestureOrigin.y) > 5) panelMoved = true;
+  if (panelMoved) api.overlayDragMove({ x: event.screenX, y: event.screenY });
+});
+$('panelHeader').addEventListener('pointerup', event => { if (panelPointerId === event.pointerId) finishPanelDrag(); });
+$('panelHeader').addEventListener('pointercancel', event => { if (panelPointerId === event.pointerId) finishPanelDrag(); });
+$('panelHeader').addEventListener('lostpointercapture', event => { if (panelPointerId === event.pointerId) finishPanelDrag(); });
+
+function finishPanelResize() {
+  const id = panelResizePointerId;
+  panelResizePointerId = null;
+  if (id !== null && panelResizeTarget?.hasPointerCapture(id)) panelResizeTarget.releasePointerCapture(id);
+  if (panelResizeActive) api.overlayResizeEnd();
+  panelResizeOrigin = null;
+  panelResizeTarget = null;
+  panelResizeActive = false;
+  panelResizeMoved = false;
+}
+
+$('panelResizeHandles').addEventListener('pointerdown', async event => {
+  const handle = event.target.closest('.panel-resize-handle')?.dataset.handle;
+  if (!handle || locked || event.button !== 0) return;
+  event.preventDefault();
+  panelResizePointerId = event.pointerId;
+  panelResizeOrigin = { x: event.screenX, y: event.screenY };
+  panelResizeTarget = event.target;
+  panelResizeMoved = false;
+  panelResizeTarget.setPointerCapture(panelResizePointerId);
+  const started = await api.overlayResizeStart({ handle, source: 'panel', ...panelResizeOrigin });
+  if (panelResizePointerId !== event.pointerId || !started) { finishPanelResize(); return; }
+  panelResizeActive = true;
+});
+$('panelResizeHandles').addEventListener('pointermove', event => {
+  if (panelResizePointerId !== event.pointerId || !panelResizeActive) return;
+  if (Math.abs(event.screenX - panelResizeOrigin.x) + Math.abs(event.screenY - panelResizeOrigin.y) > 4) panelResizeMoved = true;
+  if (panelResizeMoved) api.overlayResizeMove({ x: event.screenX, y: event.screenY });
+});
+$('panelResizeHandles').addEventListener('pointerup', event => { if (panelResizePointerId === event.pointerId) finishPanelResize(); });
+$('panelResizeHandles').addEventListener('pointercancel', event => { if (panelResizePointerId === event.pointerId) finishPanelResize(); });
+$('panelResizeHandles').addEventListener('lostpointercapture', event => { if (panelResizePointerId === event.pointerId) finishPanelResize(); });
 
 function finishGesture() {
   const id = pointerId;
@@ -295,7 +375,7 @@ $('lockButton').addEventListener('click', () => api.overlayLock(!locked));
 $('visibilityButton').addEventListener('click', () => api.overlayShow(false));
 $('styleButton').addEventListener('click', () => setView('style'));
 $('backStyle').addEventListener('click', () => setView('normal'));
-$('resetStyle').addEventListener('click', () => api.updateOverlaySettings({ scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true }));
+$('resetStyle').addEventListener('click', () => api.updateOverlaySettings({ scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true, resetLayout: true }));
 $('scaleBack').addEventListener('click', () => api.updateOverlaySettings({ scale: settings.scale - 5 }));
 $('scaleForward').addEventListener('click', () => api.updateOverlaySettings({ scale: settings.scale + 5 }));
 $('opacityRange').addEventListener('input', event => api.updateOverlaySettings({ opacity: 100 - Number(event.target.value) }));
@@ -325,7 +405,14 @@ $('setupButton').addEventListener('click', async () => {
 });
 
 api.onState(next => {
-  if (state.song?.key !== next.song?.key || state.state !== next.state || state.connected !== next.connected) activeIndex = -2;
+  const changedSong = state.song?.key !== next.song?.key;
+  if (changedSong || state.state !== next.state || state.connected !== next.connected) activeIndex = -2;
+  if (changedSong) {
+    setView('normal');
+    closeSearch();
+    candidatePage = 0;
+    showCandidatesAfterSearch = false;
+  }
   state = next;
   renderTrack();
   renderStatus();

@@ -1,16 +1,49 @@
-const { overlayDimensions } = require('./overlay-settings.cjs');
+const { overlayDimensions, boundsAtDimensions } = require('./overlay-settings.cjs');
 
-function panelDimensions(settings) {
+function normalizePanelSize(size, settings) {
+  const fallbackWidth = Math.max(560, Math.min(720, overlayDimensions(settings).width));
+  const width = Number(size?.width);
+  const height = Number(size?.height);
   return {
-    width: Math.max(560, Math.min(720, overlayDimensions(settings).width)),
-    height: 420,
+    width: Number.isFinite(width) ? Math.round(Math.max(500, Math.min(1200, width))) : fallbackWidth,
+    height: Number.isFinite(height) ? Math.round(Math.max(370, Math.min(600, height))) : 420,
+  };
+}
+
+function scaledPanelSize(size, ratio) {
+  return {
+    width: Math.round(Math.max(500, Math.min(1200, size.width * ratio))),
+    height: Math.round(Math.max(370, Math.min(600, size.height * ratio))),
+  };
+}
+
+function panelResizedLyricBounds(lyric, panel, dimensions, nextPanel, handle, side) {
+  const bounds = boundsAtDimensions(lyric, dimensions, handle);
+  if (!handle.includes('top') && !handle.includes('bottom')) return bounds;
+  const gap = 8;
+  if (side === 'above') {
+    bounds.y = handle.includes('top') ? lyric.y : lyric.y - panel.height + nextPanel.height;
+  } else {
+    const oldTop = lyric.y + lyric.height + gap;
+    const oldBottom = oldTop + panel.height;
+    bounds.y = handle.includes('top')
+      ? oldBottom - nextPanel.height - dimensions.height - gap
+      : oldTop - dimensions.height - gap;
+  }
+  return bounds;
+}
+
+function panelDimensions(settings, size) {
+  const dimensions = normalizePanelSize(size, settings);
+  return {
+    ...dimensions,
     gap: 8,
     contentScale: 1,
   };
 }
 
-function choosePanelSide(lyric, area, settings) {
-  const panel = panelDimensions(settings);
+function choosePanelSide(lyric, area, settings, size) {
+  const panel = panelDimensions(settings, size);
   const above = lyric.y - area.y;
   const below = area.y + area.height - lyric.y - lyric.height;
   const needed = panel.height + panel.gap;
@@ -19,8 +52,8 @@ function choosePanelSide(lyric, area, settings) {
   return above >= below ? 'above' : 'below';
 }
 
-function fitLyricForPanel(lyric, area, settings, side) {
-  const panel = panelDimensions(settings);
+function fitLyricForPanel(lyric, area, settings, side, size) {
+  const panel = panelDimensions(settings, size);
   const needed = panel.height + panel.gap;
   let y = lyric.y;
   if (side === 'above') y = Math.max(y, area.y + needed);
@@ -28,8 +61,8 @@ function fitLyricForPanel(lyric, area, settings, side) {
   return { ...lyric, y: Math.round(Math.max(area.y, Math.min(y, area.y + area.height - lyric.height))) };
 }
 
-function combinedLayout(lyric, settings, side, progress, area = null) {
-  const panel = panelDimensions(settings);
+function combinedLayout(lyric, settings, side, progress, area = null, size = null) {
+  const panel = panelDimensions(settings, size);
   const amount = Math.max(0, Math.min(1, progress));
   const visiblePanelHeight = Math.round(panel.height * amount);
   const gap = Math.round(panel.gap * amount);
@@ -64,4 +97,4 @@ function combinedLayout(lyric, settings, side, progress, area = null) {
   };
 }
 
-module.exports = { panelDimensions, choosePanelSide, fitLyricForPanel, combinedLayout };
+module.exports = { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, panelDimensions, choosePanelSide, fitLyricForPanel, combinedLayout };

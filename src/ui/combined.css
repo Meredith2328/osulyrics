@@ -41,6 +41,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   transform: scale(var(--panel-scale));
   transform-origin: top left;
 }
+.panel-surface:not(.locked):hover { border-color: #ba9bff75; }
 .panel-header {
   height: 46px;
   display: flex;
@@ -49,7 +50,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   padding: 0 12px 0 20px;
   background: #221e2a;
   border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
+.panel-header.dragging { cursor: grabbing; }
+.panel-header.drag-locked { cursor: default; }
 .identity, .header-actions { display: flex; align-items: center; }
 .identity { gap: 9px; }
 .brand-dot {
@@ -82,7 +88,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .icon-button:hover { background: #ffffff19; color: #fff; }
 .icon-button.close:hover { background: #c84c80; }
 
-.panel-view { height: 372px; padding: 18px 22px 20px; animation: view-in .14s ease-out both; }
+.panel-view { height: calc(100% - 46px); padding: 18px 22px 20px; animation: view-in .14s ease-out both; }
+.normal-view, .style-view, .candidate-view { display: flex; flex-direction: column; }
 @keyframes view-in { from { opacity: .55; transform: translateX(5px); } to { opacity: 1; transform: translateX(0); } }
 
 /* Main page: song → progress → lyric state → actions → daily controls. */
@@ -145,7 +152,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .control-button.selected { border-color: #aa87ff; background: #594478; color: #fff; }
 .control-next { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .control-next span { color: #ad8dff; font-size: 22px; font-weight: 400; line-height: 1; }
-.offset-row { height: 47px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.offset-row { min-height: 47px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
 .offset-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .offset-label strong { font-size: 13px; line-height: 17px; font-weight: 650; }
 .offset-label small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #a99fb4; font-size: 12px; line-height: 16px; }
@@ -179,12 +186,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .switch input:checked + .switch-track { border-color: #aa87ff; background: #8059dc; }
 .switch input:checked + .switch-track::after { transform: translateX(18px); background: #fff; }
 .switch input:focus-visible + .switch-track { outline: 2px solid #d7c5ff; outline-offset: 3px; }
-.style-footer { height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); }
+.style-footer { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 9px; border-top: 1px solid var(--border); }
 .style-footer span { color: #b7abbe; font-size: 13px; line-height: 18px; }
 .style-footer button { flex: none; padding: 0 13px; background: transparent; color: #d5c9e0; }
 
 /* Matching uses the same page heading and control rhythm. */
-.candidate-list { height: 224px; display: grid; grid-template-rows: repeat(4, 1fr); gap: 4px; margin-top: 12px; }
+.candidate-list { min-height: 180px; flex: 1; display: grid; grid-template-rows: repeat(4, 1fr); gap: 4px; margin-top: 12px; }
 .candidate { min-width: 0; padding: 7px 12px; border: 1px solid #ffffff1a; border-radius: 8px; background: #ffffff0a; color: #fff; text-align: left; }
 .candidate:hover { border-color: #aa87ff; background: #ffffff17; }
 .candidate strong, .candidate small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -192,6 +199,35 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .candidate small { color: #bcb0c6; font-size: 12px; line-height: 17px; }
 .page-row { height: 40px; display: flex; align-items: center; justify-content: space-between; margin-top: 10px; color: #cfc3db; font-size: 13px; }
 .page-row button { min-width: 74px; height: 34px; padding: 0 10px; background: transparent; }
+
+.panel-resize-handles { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.panel-surface.locked .panel-resize-handles { display: none; }
+.panel-resize-handle { position: absolute; pointer-events: auto; }
+.panel-resize-handle.top-left { top: 0; left: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.panel-resize-handle.top { top: 0; left: 14px; right: 14px; height: 7px; cursor: ns-resize; }
+.panel-resize-handle.top-right { top: 0; right: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.panel-resize-handle.left { top: 14px; bottom: 14px; left: 0; width: 7px; cursor: ew-resize; }
+.panel-resize-handle.right { top: 14px; bottom: 14px; right: 0; width: 7px; cursor: ew-resize; }
+.panel-resize-handle.bottom-left { bottom: 0; left: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.panel-resize-handle.bottom { bottom: 0; left: 14px; right: 14px; height: 7px; cursor: ns-resize; }
+.panel-resize-handle.bottom-right { bottom: 0; right: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+
+.panel-surface.compact .panel-view { padding: 12px 18px 14px; }
+.panel-surface.compact .track-block { height: 68px; }
+.panel-surface.compact .track-block h1 { max-height: 48px; font-size: 20px; }
+.panel-surface.compact .track-meta { font-size: 13px; }
+.panel-surface.compact .timeline { margin-top: 2px; }
+.panel-surface.compact .lyric-state { height: 42px; margin-top: 8px; }
+.panel-surface.compact .action-slot { height: 38px; margin-top: 8px; }
+.panel-surface.compact .control-row { height: 38px; margin-top: 8px; }
+.panel-surface.compact .offset-row { min-height: 42px; padding-top: 6px; }
+.panel-surface.compact .view-heading { height: 38px; }
+.panel-surface.compact .view-heading h1 { font-size: 20px; }
+.panel-surface.compact .settings-list { margin-top: 8px; }
+.panel-surface.compact .setting-row { min-height: 46px; }
+.panel-surface.compact .style-footer { min-height: 42px; padding-top: 6px; }
+.panel-surface.compact .candidate-list { margin-top: 8px; gap: 3px; }
+.panel-surface.compact .candidate { padding: 4px 10px; }
 
 .lyric-box { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 3px 13px; border-radius: 15px; background: transparent; text-align: center; user-select: none; touch-action: none; }
 .lyric-box.locked { cursor: pointer; }

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeFromHandle } = require('../src/overlay-settings.cjs');
+const { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, boundsAtDimensions, resizeFromHandle } = require('../src/overlay-settings.cjs');
 
 test('loads sensible defaults and rejects invalid saved values', () => {
   assert.deepEqual(normalizeOverlaySettings(), DEFAULT_OVERLAY_SETTINGS);
@@ -49,4 +49,15 @@ test('corner resize changes dimensions from the opposite anchored corner', () =>
   assert.equal(result.bounds.y + result.bounds.height, 580);
   assert.equal(result.settings.width, 700);
   assert.ok(result.settings.scale > 100);
+});
+
+test('a panel edge uses panel size to scale lyrics from the opposite edge', () => {
+  const start = { x: 72, y: 671, width: 560, height: 64 };
+  const ratio = resizeRatioFromHandle({ width: 560, height: 420 }, { x: 100, y: 100 }, { x: 156, y: 100 }, 'right');
+  const next = normalizeOverlaySettings({ ...DEFAULT_OVERLAY_SETTINGS, scale: 80 * (1 + ratio) });
+  const bounds = boundsAtDimensions(start, overlayDimensions(next), 'right');
+  assert.equal(next.scale, 88);
+  assert.equal(bounds.x, start.x);
+  assert.equal(bounds.width, 616);
+  assert.equal(bounds.height, 70);
 });

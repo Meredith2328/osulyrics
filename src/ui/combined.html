@@ -10,7 +10,7 @@
 <body>
   <div id="panelClip" class="panel-clip" hidden>
     <div id="panelSurface" class="panel-surface">
-      <header class="panel-header">
+      <header id="panelHeader" class="panel-header" title="按住空白处拖动小窗">
         <div class="identity"><span class="brand-dot">♪</span><span class="brand-name">lyrics</span></div>
         <div class="header-actions"><button id="collapseButton" class="icon-button" title="收起设置" aria-label="收起设置">⌃</button><button id="closeButton" class="icon-button close" title="退出" aria-label="退出">×</button></div>
       </header>
@@ -44,6 +44,11 @@
         <div id="candidateList" class="candidate-list"></div>
         <div class="page-row"><button id="previousPage">上一页</button><span id="pageLabel">1 / 1</span><button id="nextPage">下一页</button></div>
       </section>
+      <div id="panelResizeHandles" class="panel-resize-handles" aria-hidden="true">
+        <span class="panel-resize-handle top-left" data-handle="top-left"></span><span class="panel-resize-handle top" data-handle="top"></span><span class="panel-resize-handle top-right" data-handle="top-right"></span>
+        <span class="panel-resize-handle left" data-handle="left"></span><span class="panel-resize-handle right" data-handle="right"></span>
+        <span class="panel-resize-handle bottom-left" data-handle="bottom-left"></span><span class="panel-resize-handle bottom" data-handle="bottom"></span><span class="panel-resize-handle bottom-right" data-handle="bottom-right"></span>
+      </div>
     </div>
   </div>
 

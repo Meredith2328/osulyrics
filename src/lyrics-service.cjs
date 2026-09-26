@@ -7,6 +7,31 @@ const { requestJson, HttpError } = require('./lrclib-client.cjs');
 
 const CLIENT = 'osu-lyrics-companion/0.1 (personal desktop lyrics window)';
 
+function stripVersionSuffix(value) {
+  return String(value || '').normalize('NFKC').trim()
+    .replace(/\s*[([]\s*(?:tv\s*size|short\s*(?:ver(?:sion)?|edit)|game\s*ver(?:sion)?)\s*[)\]]\s*$/i, '').trim();
+}
+
+function automaticSearches(song) {
+  const variants = [
+    [song.romanizedTitle || song.title, song.romanizedArtist || song.artist],
+    [song.title, song.artist || song.romanizedArtist],
+    [stripVersionSuffix(song.title), song.artist || song.romanizedArtist],
+    [stripVersionSuffix(song.romanizedTitle || song.title), song.romanizedArtist || song.artist],
+  ];
+  const seen = new Set();
+  const searches = [];
+  for (const [title, artist] of variants) {
+    if (!title) continue;
+    const key = `${title.toLowerCase()}\0${String(artist || '').toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    searches.push({ track_name: title, artist_name: artist });
+  }
+  searches.push({ track_name: stripVersionSuffix(song.title) || stripVersionSuffix(song.romanizedTitle) });
+  return searches;
+}
+
 async function getJson(url, timeoutMs = 10000) {
   const response = await fetch(url, {
     headers: { 'User-Agent': CLIENT, 'Lrclib-Client': CLIENT },
@@ -131,23 +156,25 @@ class LyricsService {
     const existingLines = this.payload.lines || [];
     this.emit({ status: 'searching', message: '正在搜索带时间戳的歌词…', candidates: [] });
     try {
-      const searches = query ? [{ query }] : [
-        { track_name: song.romanizedTitle, artist_name: song.romanizedArtist },
-        ...(song.title !== song.romanizedTitle ? [{ track_name: song.title, artist_name: song.artist }] : []),
-        { track_name: song.romanizedTitle },
-      ];
+      const searches = query ? [{ query }] : automaticSearches(song);
+      const unicodeBase = stripVersionSuffix(song.title);
+      const mustTryUnicodeBase = !query && /[\u3040-\u30ff\u3400-\u9fff]/u.test(song.title || '') &&
+        unicodeBase.toLowerCase() !== stripVersionSuffix(song.romanizedTitle).toLowerCase();
       const all = new Map();
       let lastError = null;
       let attemptedTitleOnly = false;
+      let triedUnicodeBase = false;
       for (const params of searches) {
         if (generation !== this.generation || searchRun !== this.searchRun) return;
         if (params.track_name && !params.artist_name) attemptedTitleOnly = true;
+        if (params.artist_name && params.track_name === unicodeBase) triedUnicodeBase = true;
         try {
           const url = new URL('search', this.lrclibBase);
           for (const [key, value] of Object.entries(params)) if (value) url.searchParams.set(key, value);
           const found = await this.requestLyrics(url, { signal: abort.signal });
           for (const item of Array.isArray(found) ? found : []) all.set(item.id, item);
-          if (all.size >= 8) break;
+          if ((!mustTryUnicodeBase || triedUnicodeBase) &&
+              (all.size >= 8 || chooseAutomaticMatch(song, [...all.values()]))) break;
           await this.wait(350, undefined, { signal: abort.signal });
         } catch (error) {
           lastError = error;
@@ -159,7 +186,7 @@ class LyricsService {
         // A title-only query may be cached even while artist-filtered search is overloaded.
         await this.wait(1000, undefined, { signal: abort.signal });
         const titleOnly = new URL('search', this.lrclibBase);
-        titleOnly.searchParams.set('track_name', song.romanizedTitle || song.title);
+        titleOnly.searchParams.set('track_name', stripVersionSuffix(song.title) || stripVersionSuffix(song.romanizedTitle));
         try {
           const found = await this.requestLyrics(titleOnly, { signal: abort.signal, maxAttempts: 2 });
           for (const item of Array.isArray(found) ? found : []) all.set(item.id, item);
@@ -169,7 +196,7 @@ class LyricsService {
       if (!all.size && !query && lastError instanceof HttpError && lastError.status === 503) {
         // Metadata lookups use a separate cache and may succeed while search is overloaded.
         const exact = new URL('get', this.lrclibBase);
-        exact.searchParams.set('track_name', song.romanizedTitle || song.title);
+        exact.searchParams.set('track_name', stripVersionSuffix(song.title) || stripVersionSuffix(song.romanizedTitle));
         exact.searchParams.set('artist_name', song.romanizedArtist || song.artist);
         try {
           const item = await this.requestLyrics(exact, { signal: abort.signal, maxAttempts: 2 });
@@ -269,4 +296,4 @@ class LyricsService {
   }
 }
 
-module.exports = { LyricsService, fileId };
+module.exports = { LyricsService, fileId, stripVersionSuffix };

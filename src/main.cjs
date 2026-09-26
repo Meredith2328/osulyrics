@@ -7,8 +7,8 @@ const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
 const { LyricsService } = require('./lyrics-service.cjs');
 const { normalizeTosu } = require('./osu.cjs');
-const { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeFromHandle } = require('./overlay-settings.cjs');
-const { panelDimensions, choosePanelSide, fitLyricForPanel, combinedLayout } = require('./combined-layout.cjs');
+const { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, resizeFromHandle } = require('./overlay-settings.cjs');
+const { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout } = require('./combined-layout.cjs');
 const { loadWindowConfig, persistWindowConfig } = require('./window-config.cjs');
 
 const TOSU_URL = 'https://github.com/tosuapp/tosu/releases/download/v4.26.2/tosu-windows-v4.26.2.zip';
@@ -42,6 +42,7 @@ let panelOpen = true;
 let panelSide = 'above';
 let panelProgress = 0;
 let panelTargetY = null;
+let panelSize;
 let lyricBounds;
 let dragSession;
 let resizeSession;
@@ -53,7 +54,7 @@ function send(channel, data) {
 function configFile() { return path.join(app.getPath('userData'), 'windows.json'); }
 function saveConfig() {
   if (!lyricBounds) return;
-  persistWindowConfig(configFile(), { overlayBounds: lyricBounds, overlaySettings, overlayLocked, overlayShown, panelOpen });
+  persistWindowConfig(configFile(), { overlayBounds: lyricBounds, overlaySettings, panelSize, overlayLocked, overlayShown, panelOpen });
 }
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveConfig, 350); }
 
@@ -65,7 +66,7 @@ function updateHitTesting() {
 
 function applyLayout() {
   if (!appWindow || appWindow.isDestroyed()) return;
-  const layout = combinedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, screen.getDisplayMatching(lyricBounds).workArea);
+  const layout = combinedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, screen.getDisplayMatching(lyricBounds).workArea, panelSize);
   appWindow.setBounds(layout.window);
   send('layout', layout);
   updateHitTesting();
@@ -91,8 +92,8 @@ function setPanelOpen(open, animate = true) {
   let targetY = startY;
   if (open && from < 1) {
     const area = screen.getDisplayMatching(lyricBounds).workArea;
-    panelSide = choosePanelSide(lyricBounds, area, overlaySettings);
-    targetY = fitLyricForPanel(lyricBounds, area, overlaySettings, panelSide).y;
+    panelSide = choosePanelSide(lyricBounds, area, overlaySettings, panelSize);
+    targetY = fitLyricForPanel(lyricBounds, area, overlaySettings, panelSide, panelSize).y;
   }
   panelOpen = !!open;
   panelTargetY = targetY;
@@ -280,6 +281,7 @@ function createWindow() {
   const area = screen.getPrimaryDisplay().workArea;
   const config = loadWindowConfig(configFile());
   overlaySettings = normalizeOverlaySettings(config.overlaySettings);
+  panelSize = normalizePanelSize(config.panelSize, overlaySettings);
   overlayLocked = config.overlayLocked === true;
   overlayShown = config.overlayShown !== false;
   panelOpen = config.panelOpen !== false;
@@ -296,8 +298,8 @@ function createWindow() {
     y: savedVisible ? saved.y : Math.round(area.y + area.height - dimensions.height - 42),
     ...dimensions,
   };
-  panelSide = choosePanelSide(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings);
-  const initial = combinedLayout(lyricBounds, overlaySettings, panelSide, 0, screen.getDisplayMatching(lyricBounds).workArea);
+  panelSide = choosePanelSide(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings, panelSize);
+  const initial = combinedLayout(lyricBounds, overlaySettings, panelSide, 0, screen.getDisplayMatching(lyricBounds).workArea, panelSize);
   appWindow = new BrowserWindow({
     ...initial.window,
     show: overlayShown,
@@ -366,7 +368,7 @@ ipcMain.handle('initial', () => ({
   tosu: { status: tosuStatus, installed: !!findTosu(tosuFolder()) },
   overlay: { locked: overlayLocked, settings: overlaySettings, shown: overlayShown, hotkey: LYRICS_HOTKEY, hotkeyRegistered },
   panel: { open: panelOpen, side: panelSide },
-  layout: combinedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, screen.getDisplayMatching(lyricBounds).workArea),
+  layout: combinedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, screen.getDisplayMatching(lyricBounds).workArea, panelSize),
 }));
 ipcMain.handle('install-tosu', installTosu);
 ipcMain.handle('start-tosu', () => startTosu());
@@ -398,12 +400,16 @@ ipcMain.handle('overlay-settings-update', (_event, patch) => {
   finishAnimation();
   const previous = overlaySettings;
   overlaySettings = normalizeOverlaySettings({ ...overlaySettings, ...(patch && typeof patch === 'object' ? patch : {}) });
+  if (patch?.resetLayout === true) panelSize = normalizePanelSize(null, overlaySettings);
+  else if (previous.scale !== overlaySettings.scale || previous.width !== overlaySettings.width) {
+    panelSize = scaledPanelSize(panelSize, overlayDimensions(overlaySettings).width / overlayDimensions(previous).width);
+  }
   if (previous.scale !== overlaySettings.scale || previous.width !== overlaySettings.width || previous.showTranslation !== overlaySettings.showTranslation) {
     const anchor = { centerX: lyricBounds.x + lyricBounds.width / 2, topY: lyricBounds.y };
     lyricBounds = styleBoundsAtAnchor(anchor, overlayDimensions(overlaySettings));
-    if (panelOpen) lyricBounds = fitLyricForPanel(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings, panelSide);
+    if (panelOpen) lyricBounds = fitLyricForPanel(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings, panelSide, panelSize);
     applyLayout();
-  }
+  } else if (patch?.resetLayout === true) applyLayout();
   send('overlay-settings', { locked: overlayLocked, settings: overlaySettings });
   scheduleSave();
   return overlaySettings;
@@ -422,13 +428,13 @@ ipcMain.on('overlay-content-height', (event, measuredHeight) => {
   if (height === lyricBounds.height) return;
   lyricBounds = { ...lyricBounds, height };
   if (panelOpen && panelSide === 'below') {
-    lyricBounds = fitLyricForPanel(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings, panelSide);
+    lyricBounds = fitLyricForPanel(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings, panelSide, panelSize);
   }
   applyLayout();
   scheduleSave();
 });
 ipcMain.handle('overlay-drag-start', (event, pointer) => {
-  if (!appWindow || event.sender !== appWindow.webContents || overlayLocked || !overlayInteractive || resizeSession || animationTimer) return false;
+  if (!appWindow || event.sender !== appWindow.webContents || overlayLocked || (!overlayInteractive && !panelOpen) || resizeSession || animationTimer) return false;
   const x = Number(pointer?.x), y = Number(pointer?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
   dragSession = { lyric: { ...lyricBounds }, pointer: { x, y } };
@@ -445,22 +451,35 @@ ipcMain.on('overlay-drag-end', event => {
   if (appWindow && event.sender === appWindow.webContents) { dragSession = null; scheduleSave(); }
 });
 ipcMain.handle('overlay-resize-start', (event, payload) => {
-  if (!appWindow || event.sender !== appWindow.webContents || overlayLocked || !overlayInteractive || dragSession || animationTimer) return false;
+  const source = payload?.source === 'panel' ? 'panel' : 'lyric';
+  if (!appWindow || event.sender !== appWindow.webContents || overlayLocked || (source === 'panel' ? !panelOpen : !overlayInteractive) || dragSession || animationTimer) return false;
   const handle = String(payload?.handle || '');
   if (!['left','right','top','bottom','top-left','top-right','bottom-left','bottom-right'].includes(handle)) return false;
   const x = Number(payload?.x), y = Number(payload?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
-  resizeSession = { lyric: { ...lyricBounds }, settings: overlaySettings, pointer: { x, y }, handle };
+  resizeSession = { lyric: { ...lyricBounds }, panel: { ...panelSize }, settings: overlaySettings, pointer: { x, y }, handle, source };
   return true;
 });
 ipcMain.on('overlay-resize-move', (event, pointer) => {
   if (!appWindow || event.sender !== appWindow.webContents || !resizeSession || overlayLocked) return;
   const x = Number(pointer?.x), y = Number(pointer?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-  const result = resizeFromHandle(resizeSession.lyric, resizeSession.settings, resizeSession.pointer, { x, y }, resizeSession.handle);
+  let result;
+  if (resizeSession.source === 'panel') {
+    const ratio = resizeRatioFromHandle(resizeSession.panel, resizeSession.pointer, { x, y }, resizeSession.handle);
+    const settings = normalizeOverlaySettings({ ...resizeSession.settings, scale: resizeSession.settings.scale * (1 + ratio) });
+    const nextPanel = scaledPanelSize(resizeSession.panel, settings.scale / resizeSession.settings.scale);
+    result = {
+      settings,
+      bounds: panelResizedLyricBounds(resizeSession.lyric, resizeSession.panel, overlayDimensions(settings), nextPanel, resizeSession.handle, panelSide),
+    };
+  } else {
+    result = resizeFromHandle(resizeSession.lyric, resizeSession.settings, resizeSession.pointer, { x, y }, resizeSession.handle);
+  }
   lyricBounds = result.bounds;
   overlaySettings = result.settings;
-  if (panelOpen) lyricBounds = fitLyricForPanel(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings, panelSide);
+  panelSize = scaledPanelSize(resizeSession.panel, overlaySettings.scale / resizeSession.settings.scale);
+  if (panelOpen) lyricBounds = fitLyricForPanel(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings, panelSide, panelSize);
   applyLayout();
   send('overlay-settings', { locked: overlayLocked, settings: overlaySettings });
 });

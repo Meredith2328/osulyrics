@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { parseLrc, serializeLrc, rankLyrics, chooseAutomaticMatch, activeLineAt } = require('../src/lyrics.cjs');
-const { LyricsService } = require('../src/lyrics-service.cjs');
+const { LyricsService, stripVersionSuffix } = require('../src/lyrics-service.cjs');
 const { HttpError } = require('../src/lrclib-client.cjs');
 
 test('pairs Japanese and Chinese at the same timestamp and preserves repeated timestamps', () => {
@@ -54,6 +54,28 @@ test('uses audio length instead of the final hit object for lyric version select
     { id: 2, trackName: 'Song', artistName: 'Artist', duration: 200, syncedLyrics: '[00:01.00]x' },
   ];
   assert.equal(chooseAutomaticMatch(song, candidates).id, 2);
+});
+
+test('TV Size titles search the unsuffixed Japanese name and choose the short recording', async () => {
+  const requests = [];
+  const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-tv-')), () => {}, {
+    requestLyrics: async url => {
+      const title = url.searchParams.get('track_name');
+      requests.push(title);
+      if (title === 'Gurenge') return [{ id: 1, trackName: 'Gurenge', artistName: 'LiSA', duration: 238, syncedLyrics: '[00:01.00]Full song' }];
+      if (title === '紅蓮華') return [{ id: 2, trackName: '紅蓮華', artistName: 'LiSA', duration: 89, syncedLyrics: '[00:01.00]強くなれる理由を知った\n[00:03.00]僕を連れて進め' }];
+      return [];
+    },
+    wait: async () => {},
+  });
+  service.translate = async () => {};
+  service.song = { key: 'tv', title: '紅蓮華 (TV Size)', romanizedTitle: 'Gurenge (TV Size)', artist: 'LiSA', romanizedArtist: 'LiSA', durationMs: 90000 };
+  await service.search();
+  assert.ok(requests.includes('紅蓮華'));
+  assert.equal(service.payload.status, 'ready');
+  assert.equal(service.readMeta().selectedId, 2);
+  assert.equal(service.payload.lines[0].original, '強くなれる理由を知った');
+  assert.equal(stripVersionSuffix('Love Letter (English Version)'), 'Love Letter (English Version)');
 });
 
 test('prefers Japanese Love Letter lyrics over the same artist English edition', () => {
