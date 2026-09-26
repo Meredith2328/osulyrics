@@ -57,7 +57,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .panel-header.dragging { cursor: grabbing; }
 .panel-header.drag-locked { cursor: default; }
 .identity, .header-actions { display: flex; align-items: center; }
-.identity { gap: 9px; }
+.identity { min-width: 0; gap: 9px; }
 .brand-dot {
   width: 26px;
   height: 26px;
@@ -100,29 +100,22 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 .collapsed-toggle:hover { filter: brightness(1.12); transform: scale(1.06); }
 .brand-name { color: #d7cfdd; font-size: 15px; font-weight: 700; letter-spacing: .01em; }
-.header-actions { gap: 3px; }
-.icon-button {
-  width: 34px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #d3c9dd;
-  font-size: 20px;
-  line-height: 1;
-  transition: background .13s ease, color .13s ease;
-}
-.icon-button:hover { background: #ffffff19; color: #fff; }
-.icon-button.close:hover { background: #c84c80; }
+.phase-badge { flex: none; margin-left: 2px; padding: 4px 8px; border-radius: 7px; background: #ffffff11; color: #bfb4c9; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.header-actions { flex: none; gap: 8px; }
+.header-lock { width: 36px; display: grid; place-items: center; padding: 0; }
+.header-lock svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.header-lock .lock-closed, .header-lock.selected .lock-open { display: none; }
+.header-lock.selected .lock-closed { display: block; }
+.header-lock.selected { border-color: #aa87ff; background: #594478; color: #fff; }
+.header-visibility { padding: 0 12px; font-size: 13px; }
 
 .panel-view { height: calc(100% - 46px); padding: 18px 22px 20px; animation: view-in .14s ease-out both; }
 .normal-view, .style-view, .candidate-view { display: flex; flex-direction: column; }
 @keyframes view-in { from { opacity: .55; transform: translateX(5px); } to { opacity: 1; transform: translateX(0); } }
 
 /* Main page: song → progress → lyric state → actions → daily controls. */
-.track-block { height: 79px; min-width: 0; }
+.track-block { height: 92px; min-width: 0; display: flex; align-items: flex-start; gap: 14px; }
+.track-info { min-width: 0; flex: 1; }
 .track-block h1 {
   display: -webkit-box;
   max-height: 56px;
@@ -135,15 +128,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   font-weight: 720;
   overflow-wrap: anywhere;
 }
-.track-meta { display: flex; align-items: center; gap: 16px; min-width: 0; margin-top: 4px; color: var(--muted); font-size: 14px; line-height: 18px; }
-.track-meta #trackArtist { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.phase-label { flex-shrink: 0; color: #a9a0b4; font-size: 13px; }
-.timeline { height: 24px; display: flex; align-items: center; gap: 12px; margin-top: 4px; color: #bdb2c7; font-size: 13px; font-variant-numeric: tabular-nums; }
+#trackArtist { display: block; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 14px; line-height: 18px; }
+.track-style-button { flex: none; display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 0 13px; }
+.track-style-button span { color: #ad8dff; font-size: 21px; font-weight: 400; line-height: 1; }
+.timeline { height: 24px; display: flex; align-items: center; gap: 12px; margin-top: 10px; color: #bdb2c7; font-size: 13px; font-variant-numeric: tabular-nums; }
 .timeline span { min-width: 34px; }
 .timeline #duration { text-align: right; }
 .progress-track { height: 5px; flex: 1; overflow: hidden; border-radius: 10px; background: #17131d; }
 .progress-fill { width: 0; height: 100%; border-radius: inherit; background: var(--accent); }
-.lyric-state { height: 48px; display: flex; align-items: center; gap: 12px; margin-top: 13px; padding: 0 14px; border-radius: 9px; background: #ffffff0b; }
+.lyric-state { height: 48px; display: flex; align-items: center; gap: 12px; margin-top: 24px; padding: 0 14px; border-radius: 9px; background: #ffffff0b; }
 .status-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #93899f; }
 .lyric-state[data-status="ready"] .status-dot { background: #75d4ad; }
 .lyric-state[data-status="searching"] .status-dot, .lyric-state[data-status="loading"] .status-dot { background: #ffcc5b; }
@@ -151,9 +144,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .status-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .status-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 18px; font-weight: 650; }
 .status-detail { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #bdb2c7; font-size: 12.5px; line-height: 16px; }
-.action-slot { height: 40px; margin-top: 12px; }
+.action-slot { height: 40px; margin-top: 18px; }
 .action-row, .search-row, .setup-panel { height: 40px; display: flex; align-items: center; gap: 9px; }
-.action-button, .quiet-button, .control-button, .back-button, .style-footer button, .page-row button {
+.action-button, .quiet-button, .track-style-button, .header-lock, .header-visibility, .back-button, .style-footer button, .page-row button {
   height: 38px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -164,7 +157,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   white-space: nowrap;
   transition: background .13s ease, border-color .13s ease, color .13s ease;
 }
-.action-button:hover:not(:disabled), .quiet-button:hover:not(:disabled), .control-button:hover:not(:disabled), .back-button:hover:not(:disabled), .style-footer button:hover:not(:disabled), .page-row button:hover:not(:disabled) { background: #ffffff1c; border-color: #ffffff4a; }
+.action-button:hover:not(:disabled), .quiet-button:hover:not(:disabled), .track-style-button:hover:not(:disabled), .header-lock:hover:not(:disabled), .header-visibility:hover:not(:disabled), .back-button:hover:not(:disabled), .style-footer button:hover:not(:disabled), .page-row button:hover:not(:disabled) { background: #ffffff1c; border-color: #ffffff4a; }
+.header-lock, .header-visibility { height: 34px; }
 .action-button { min-width: 118px; padding: 0 15px; }
 .action-button.primary, .normal-view.needs-lyrics .action-search { border-color: #aa87ff; background: #8159dc; color: #fff; }
 .action-button.primary:hover:not(:disabled), .normal-view.needs-lyrics .action-search:hover:not(:disabled) { background: #9672eb; }
@@ -176,11 +170,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .search-row .quiet-button { min-width: 58px; }
 .setup-panel { justify-content: space-between; color: #d1c5dc; font-size: 13px; }
 .setup-panel .action-button { min-width: 82px; }
-.control-row { height: 40px; display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-.control-button { padding: 0 15px; }
-.control-button.selected { border-color: #aa87ff; background: #594478; color: #fff; }
-.control-next { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-.control-next span { color: #ad8dff; font-size: 22px; font-weight: 400; line-height: 1; }
 .offset-row { min-height: 47px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
 .offset-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .offset-label strong { font-size: 13px; line-height: 17px; font-weight: 650; }
@@ -242,13 +231,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .panel-resize-handle.bottom-right { bottom: 0; right: 0; width: 14px; height: 14px; cursor: nwse-resize; }
 
 .panel-surface.compact .panel-view { padding: 12px 18px 14px; }
-.panel-surface.compact .track-block { height: 68px; }
+.panel-surface.compact .track-block { height: 76px; }
 .panel-surface.compact .track-block h1 { max-height: 48px; font-size: 20px; }
-.panel-surface.compact .track-meta { font-size: 13px; }
-.panel-surface.compact .timeline { margin-top: 2px; }
-.panel-surface.compact .lyric-state { height: 42px; margin-top: 8px; }
-.panel-surface.compact .action-slot { height: 38px; margin-top: 8px; }
-.panel-surface.compact .control-row { height: 38px; margin-top: 8px; }
+.panel-surface.compact #trackArtist { font-size: 13px; }
+.panel-surface.compact .track-style-button { height: 34px; margin-top: 7px; padding: 0 9px; font-size: 13px; }
+.panel-surface.compact .timeline { margin-top: 3px; }
+.panel-surface.compact .lyric-state { height: 42px; margin-top: 10px; }
+.panel-surface.compact .action-slot { height: 38px; margin-top: 10px; }
 .panel-surface.compact .offset-row { min-height: 42px; padding-top: 6px; }
 .panel-surface.compact .view-heading { height: 38px; }
 .panel-surface.compact .view-heading h1 { font-size: 20px; }

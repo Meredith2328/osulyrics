@@ -148,7 +148,9 @@ function renderStatus() {
 }
 
 function renderControls() {
-  $('lockButton').textContent = locked ? '解锁位置' : '锁定位置';
+  const lockLabel = locked ? '解锁位置' : '锁定位置';
+  $('lockButton').title = lockLabel;
+  $('lockButton').setAttribute('aria-label', lockLabel);
   $('lockButton').classList.toggle('selected', locked);
   $('lockButton').setAttribute('aria-pressed', String(locked));
   $('panelHeader').classList.toggle('drag-locked', locked);
@@ -232,7 +234,6 @@ function applyLayout(layout) {
   box.style.height = `${layout.lyric.height}px`;
   renderCollapsedToggle();
   if (widthChanged) queueLyricMeasure();
-  $('collapseButton').textContent = layout.side === 'above' ? '⌃' : '⌄';
 }
 
 function tick() {
@@ -376,10 +377,8 @@ $('lyricBox').addEventListener('keydown', event => {
   if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); api.panelToggle(true); }
 });
 
-$('collapseButton').addEventListener('click', () => api.panelToggle(false));
 $('brandToggle').addEventListener('click', () => api.panelToggle(false));
 $('collapsedToggle').addEventListener('click', () => api.panelToggle(true));
-$('closeButton').addEventListener('click', () => api.windowAction('close'));
 $('lockButton').addEventListener('click', () => api.overlayLock(!locked));
 $('visibilityButton').addEventListener('click', () => api.overlayShow(false));
 $('styleButton').addEventListener('click', () => setView('style'));

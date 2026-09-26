@@ -11,12 +11,17 @@
   <div id="panelClip" class="panel-clip" hidden>
     <div id="panelSurface" class="panel-surface">
       <header id="panelHeader" class="panel-header" title="按住空白处拖动小窗">
-        <div class="identity"><button id="brandToggle" class="brand-dot" type="button" title="收起设置" aria-label="收起设置">♪</button><span class="brand-name">osu!lyrics</span></div>
-        <div class="header-actions"><button id="collapseButton" class="icon-button" title="收起设置" aria-label="收起设置">⌃</button><button id="closeButton" class="icon-button close" title="退出" aria-label="退出">×</button></div>
+        <div class="identity"><button id="brandToggle" class="brand-dot" type="button" title="收起设置" aria-label="收起设置">♪</button><span class="brand-name">osu!lyrics</span><span id="phaseBadge" class="phase-badge">等待 osu!</span></div>
+        <div class="header-actions">
+          <button id="lockButton" class="header-lock" type="button" title="锁定位置" aria-label="锁定位置" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="10" width="14" height="11" rx="2"/><path class="lock-closed" d="M8 10V7a4 4 0 0 1 8 0v3"/><path class="lock-open" d="M8 10V7a4 4 0 0 1 7.5-2"/></svg>
+          </button>
+          <button id="visibilityButton" class="header-visibility" type="button">隐藏osu!lyrics</button>
+        </div>
       </header>
 
       <section id="normalView" class="panel-view normal-view">
-        <div class="track-block"><h1 id="trackTitle">等待歌曲</h1><div class="track-meta"><span id="trackArtist">播放后自动识别</span><span id="phaseBadge" class="phase-label">等待 osu!</span></div></div>
+        <div class="track-block"><div class="track-info"><h1 id="trackTitle">等待歌曲</h1><span id="trackArtist">播放后自动识别</span></div><button id="styleButton" class="track-style-button">歌词外观<span aria-hidden="true">›</span></button></div>
         <div class="timeline"><span id="elapsed">0:00</span><div class="progress-track"><div id="progress" class="progress-fill"></div></div><span id="duration">--:--</span></div>
         <div id="lyricState" class="lyric-state" data-status="idle"><span class="status-dot"></span><div class="status-copy"><strong id="sourceLabel">等待歌曲</strong><span id="translationLabel" class="status-detail"></span></div></div>
         <div class="action-slot">
@@ -24,7 +29,6 @@
           <div id="searchRow" class="search-row" hidden><input id="searchInput" type="search" placeholder="输入曲名或歌手"><button id="submitSearch" class="action-button primary">搜索</button><button id="cancelSearch" class="quiet-button">取消</button></div>
           <div id="setupPanel" class="setup-panel" hidden><span id="setupDescription">连接 tosu 后读取歌曲</span><button id="setupButton" class="action-button primary">启动</button></div>
         </div>
-        <div class="control-row"><button id="lockButton" class="control-button">锁定位置</button><button id="visibilityButton" class="control-button">隐藏osu!lyrics</button><button id="styleButton" class="control-button control-next">歌词外观<span aria-hidden="true">›</span></button></div>
         <div class="offset-row"><div class="offset-label"><strong>歌词校时</strong><small>− 提前 0.5 秒 · ＋ 延后 0.5 秒</small></div><div class="stepper"><button id="offsetBack" aria-label="歌词提前半秒">−</button><output id="offsetValue">0.0s</output><button id="offsetForward" aria-label="歌词延后半秒">＋</button></div></div>
       </section>
 
