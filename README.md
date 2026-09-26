@@ -1,5 +1,7 @@
 # osu!lyrics
 
+[English](README.en.md)
+
 给 osu!lazer 用的 Windows 悬浮歌词工具。它在游戏外运行，通过本机的 [tosu](https://github.com/tosuapp/tosu) 读取当前谱面与播放位置，不修改游戏，也不复制 osu! 源码。
 
 ![osu!lyrics 在 osu!lazer 旁显示冰蓝色样的歌词与控制面板](docs/osu-lyrics-window.png)
