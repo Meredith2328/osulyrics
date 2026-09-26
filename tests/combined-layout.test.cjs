@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { panelDimensions, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout } = require('../src/combined-layout.cjs');
+const { panelDimensions, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout } = require('../src/combined-layout.cjs');
 
 const settings = { scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true };
 const screen = { x: 0, y: 0, width: 1920, height: 900 };
@@ -59,20 +59,20 @@ test('at small lyric sizes the control stays full width with readable minimum sc
   assert.equal(layout.panel.width, layout.lyric.width);
 });
 
-test('very small lyrics keep a minimum readable panel width and centered anchor', () => {
+test('very small lyrics keep a minimum readable panel width with aligned left edges', () => {
   const small = { ...settings, scale: 70, width: 480 };
   const lyric = { x: 100, y: 600, width: 336, height: 56 };
   const layout = combinedLayout(lyric, small, 'above', 1);
   assert.equal(layout.panel.width, 560);
   assert.equal(layout.window.x + layout.lyric.x, lyric.x);
-  assert.equal(layout.window.x + layout.panel.x + layout.panel.width / 2, lyric.x + lyric.width / 2);
+  assert.equal(layout.window.x + layout.panel.x, lyric.x);
 });
 
 test('a wider panel stays on screen near the display edge without moving lyrics', () => {
   const small = { ...settings, scale: 70, width: 480 };
   const lyric = { x: 20, y: 600, width: 336, height: 56 };
   const layout = combinedLayout(lyric, small, 'above', 1, screen);
-  assert.equal(layout.window.x, 0);
+  assert.equal(layout.window.x, 20);
   assert.equal(layout.window.x + layout.lyric.x, lyric.x);
   assert.equal(layout.window.x + layout.window.width <= screen.width, true);
 });
@@ -105,4 +105,36 @@ test('top and bottom panel borders keep the opposite panel edge fixed', () => {
   const fromBelowBottom = panelResizedLyricBounds(below, panel, dimensions, enlarged, 'bottom', 'below');
   assert.equal(fromBelowTop.y + fromBelowTop.height + 8 + enlarged.height, belowBottom);
   assert.equal(fromBelowBottom.y + fromBelowBottom.height + 8, belowTop);
+});
+
+test('collapse first shrinks at the panel icon, then moves the dot vertically to lyrics', () => {
+  const lyric = { x: 400, y: 650, width: 700, height: 80 };
+  const frames = [1, .75, .5, .25, 0].map(progress => animatedLayout(lyric, settings, 'above', progress, screen));
+  assert.deepEqual(frames.map(frame => frame.window), [frames[0].window, frames[0].window, frames[0].window, frames[0].window, frames[0].window]);
+  assert.deepEqual(frames.map(frame => frame.window.y + frame.lyric.y), [650, 650, 650, 650, 650]);
+  assert.equal(frames[0].animation.panelScale, 1);
+  assert.equal(frames[2].animation.panelScale, 0);
+  assert.equal(frames[4].animation.panelScale, 0);
+  assert.equal(frames[0].animation.dot.y, frames[1].animation.dot.y);
+  assert.equal(frames[1].animation.dot.y, frames[2].animation.dot.y);
+  assert.ok(frames[3].animation.dot.y > frames[2].animation.dot.y);
+  assert.equal(frames[4].animation.dot.y, frames[4].lyric.y + 3);
+  assert.equal(frames[0].animation.dot.x, frames[4].animation.dot.x);
+});
+
+test('when the panel opens below lyrics, the dot travels upward instead', () => {
+  const lyric = { x: 400, y: 40, width: 700, height: 80 };
+  const atPanel = animatedLayout(lyric, settings, 'below', .5, screen);
+  const atLyric = animatedLayout(lyric, settings, 'below', 0, screen);
+  assert.ok(atPanel.animation.dot.y > atLyric.animation.dot.y);
+  assert.equal(atLyric.animation.dot.y, atLyric.lyric.y + 3);
+});
+
+test('narrow lyrics still give the icon a vertical-only path when panel is wider', () => {
+  const lyric = { x: 100, y: 650, width: 336, height: 56 };
+  const small = { ...settings, scale: 70, width: 480 };
+  const atPanel = animatedLayout(lyric, small, 'above', .5, screen);
+  const atLyric = animatedLayout(lyric, small, 'above', 0, screen);
+  assert.equal(atPanel.animation.dot.x, atLyric.animation.dot.x);
+  assert.equal(atPanel.window.x + atPanel.panel.x, lyric.x);
 });

@@ -39,7 +39,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   background: var(--surface);
   box-shadow: 0 16px 38px #0008;
   transform: scale(var(--panel-scale));
-  transform-origin: top left;
+  transform-origin: 33px 23px;
 }
 .panel-surface:not(.locked):hover { border-color: #ba9bff75; }
 .panel-header {
@@ -59,17 +59,46 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .identity, .header-actions { display: flex; align-items: center; }
 .identity { gap: 9px; }
 .brand-dot {
-  width: 25px;
-  height: 25px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #e95ca6;
-  color: #251b2b;
-  font-size: 17px;
+  border: 2px solid #fff;
+  background: radial-gradient(circle at 30% 23%, #ff9bca, #f069aa 55%, #d94591);
+  color: #fff;
+  font-family: "Segoe UI Symbol", "Microsoft YaHei UI", sans-serif;
+  font-size: 18px;
   font-weight: 800;
   line-height: 1;
+  padding: 0;
+  text-shadow: 0 1px 1px #a12c67;
+  box-shadow: 0 0 0 2px #ec6dad, 0 2px 8px #0005;
+  cursor: pointer;
 }
+.brand-dot:hover { filter: brightness(1.12); }
+.collapsed-toggle {
+  position: absolute;
+  z-index: 30;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 23%, #ff9bca, #f069aa 55%, #d94591);
+  color: #fff;
+  font-family: "Segoe UI Symbol", "Microsoft YaHei UI", sans-serif;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 1px #a12c67;
+  box-shadow: 0 0 0 2px #ec6dad, 0 3px 12px #0007;
+  cursor: pointer;
+  transition: background .13s ease, transform .13s ease, opacity .08s ease;
+}
+.collapsed-toggle:hover { filter: brightness(1.12); transform: scale(1.06); }
 .brand-name { color: #d7cfdd; font-size: 15px; font-weight: 700; letter-spacing: .01em; }
 .header-actions { gap: 3px; }
 .icon-button {

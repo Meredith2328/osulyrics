@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'">
-  <title>osu! lyrics</title>
+  <title>osu!lyrics</title>
   <link rel="stylesheet" href="combined.css">
 </head>
 <body>
   <div id="panelClip" class="panel-clip" hidden>
     <div id="panelSurface" class="panel-surface">
       <header id="panelHeader" class="panel-header" title="按住空白处拖动小窗">
-        <div class="identity"><span class="brand-dot">♪</span><span class="brand-name">lyrics</span></div>
+        <div class="identity"><button id="brandToggle" class="brand-dot" type="button" title="收起设置" aria-label="收起设置">♪</button><span class="brand-name">osu!lyrics</span></div>
         <div class="header-actions"><button id="collapseButton" class="icon-button" title="收起设置" aria-label="收起设置">⌃</button><button id="closeButton" class="icon-button close" title="退出" aria-label="退出">×</button></div>
       </header>
 
@@ -24,7 +24,7 @@
           <div id="searchRow" class="search-row" hidden><input id="searchInput" type="search" placeholder="输入曲名或歌手"><button id="submitSearch" class="action-button primary">搜索</button><button id="cancelSearch" class="quiet-button">取消</button></div>
           <div id="setupPanel" class="setup-panel" hidden><span id="setupDescription">连接 tosu 后读取歌曲</span><button id="setupButton" class="action-button primary">启动</button></div>
         </div>
-        <div class="control-row"><button id="lockButton" class="control-button">锁定歌词</button><button id="visibilityButton" class="control-button">隐藏歌词</button><button id="styleButton" class="control-button control-next">歌词外观<span aria-hidden="true">›</span></button></div>
+        <div class="control-row"><button id="lockButton" class="control-button">锁定位置</button><button id="visibilityButton" class="control-button">隐藏osu!lyrics</button><button id="styleButton" class="control-button control-next">歌词外观<span aria-hidden="true">›</span></button></div>
         <div class="offset-row"><div class="offset-label"><strong>歌词校时</strong><small>− 提前 0.5 秒 · ＋ 延后 0.5 秒</small></div><div class="stepper"><button id="offsetBack" aria-label="歌词提前半秒">−</button><output id="offsetValue">0.0s</output><button id="offsetForward" aria-label="歌词延后半秒">＋</button></div></div>
       </section>
 
@@ -61,6 +61,7 @@
       <span class="resize-handle bottom-left" data-handle="bottom-left"></span><span class="resize-handle bottom" data-handle="bottom"></span><span class="resize-handle bottom-right" data-handle="bottom-right"></span>
     </div>
   </div>
+  <button id="collapsedToggle" class="collapsed-toggle" type="button" title="展开osu!lyrics" aria-label="展开osu!lyrics" hidden>♪</button>
   <script src="../playback-clock.js"></script>
   <script src="combined.js"></script>
 </body>

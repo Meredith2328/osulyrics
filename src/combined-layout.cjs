@@ -67,12 +67,12 @@ function combinedLayout(lyric, settings, side, progress, area = null, size = nul
   const visiblePanelHeight = Math.round(panel.height * amount);
   const gap = Math.round(panel.gap * amount);
   const width = Math.max(lyric.width, panel.width);
-  const centeredX = Math.round(lyric.x + lyric.width / 2 - width / 2);
+  const preferredX = Math.round(lyric.x);
   const windowX = area && width <= area.width
-    ? Math.max(area.x, Math.min(centeredX, area.x + area.width - width))
-    : centeredX;
+    ? Math.max(area.x, Math.min(preferredX, area.x + area.width - width))
+    : preferredX;
   const lyricX = lyric.x - windowX;
-  const panelX = Math.round((width - panel.width) / 2);
+  const panelX = panel.width >= lyric.width ? 0 : lyricX;
   const above = side === 'above';
   const lyricY = above ? visiblePanelHeight + gap : 0;
   return {
@@ -97,4 +97,25 @@ function combinedLayout(lyric, settings, side, progress, area = null, size = nul
   };
 }
 
-module.exports = { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, panelDimensions, choosePanelSide, fitLyricForPanel, combinedLayout };
+function animatedLayout(lyric, settings, side, progress, area = null, size = null) {
+  const layout = combinedLayout(lyric, settings, side, 1, area, size);
+  const amount = Math.max(0, Math.min(1, progress));
+  const travel = Math.min(1, amount * 2);
+  const easedTravel = travel * travel * (3 - 2 * travel);
+  const growth = Math.max(0, Math.min(1, (amount - .5) * 2));
+  const lyricDot = { x: layout.lyric.x + 16, y: layout.lyric.y + 3 };
+  const panelDot = { x: layout.panel.x + 16, y: layout.panel.y + 6 };
+  return {
+    ...layout,
+    animation: {
+      progress: amount,
+      panelScale: growth * growth * (3 - 2 * growth),
+      dot: {
+        x: Math.round(lyricDot.x + (panelDot.x - lyricDot.x) * easedTravel),
+        y: Math.round(lyricDot.y + (panelDot.y - lyricDot.y) * easedTravel),
+      },
+    },
+  };
+}
+
+module.exports = { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, panelDimensions, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout };

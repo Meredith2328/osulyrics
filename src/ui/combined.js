@@ -8,6 +8,7 @@ let locked = false;
 let shown = true;
 let panelOpen = true;
 let panelSide = 'above';
+let currentLayout = null;
 let activeIndex = -2;
 let activeVisible = false;
 let editing = false;
@@ -73,6 +74,19 @@ function renderLyrics() {
   }
   queueLyricMeasure();
   if (visible !== activeVisible) { activeVisible = visible; api.overlayVisibility(visible); }
+  renderCollapsedToggle();
+}
+
+function renderCollapsedToggle() {
+  if (!currentLayout) return;
+  const dot = $('collapsedToggle');
+  const animation = currentLayout.animation;
+  const position = animation?.dot || { x: currentLayout.lyric.x + 16, y: currentLayout.lyric.y + 3 };
+  dot.style.left = `${position.x}px`;
+  dot.style.top = `${position.y}px`;
+  dot.style.opacity = String(animation ? 1 - animation.panelScale : 1);
+  dot.style.pointerEvents = animation?.panelScale > .95 ? 'none' : 'auto';
+  dot.hidden = !activeVisible || (!animation && currentLayout.progress > 0);
 }
 
 function setEditing(value) {
@@ -134,13 +148,13 @@ function renderStatus() {
 }
 
 function renderControls() {
-  $('lockButton').textContent = locked ? '解锁歌词' : '锁定歌词';
+  $('lockButton').textContent = locked ? '解锁位置' : '锁定位置';
   $('lockButton').classList.toggle('selected', locked);
   $('lockButton').setAttribute('aria-pressed', String(locked));
   $('panelHeader').classList.toggle('drag-locked', locked);
   $('panelSurface').classList.toggle('locked', locked);
   $('styleButton').disabled = locked;
-  $('visibilityButton').textContent = shown ? '隐藏歌词' : '显示歌词';
+  $('visibilityButton').textContent = shown ? '隐藏osu!lyrics' : '显示osu!lyrics';
   if (locked && view === 'style') setView('normal');
   const box = $('lyricBox');
   box.classList.toggle('locked', locked);
@@ -196,25 +210,27 @@ function renderCandidates() {
 
 function applyLayout(layout) {
   if (!layout) return;
+  currentLayout = layout;
   panelSide = layout.side;
   const clip = $('panelClip');
   const panel = layout.panel;
-  clip.hidden = panel.visibleHeight < 1;
+  clip.hidden = !layout.animation && panel.visibleHeight < 1;
   clip.style.left = `${panel.x}px`;
   clip.style.top = `${panel.y}px`;
   clip.style.width = `${panel.width}px`;
-  clip.style.height = `${panel.visibleHeight}px`;
-  $('panelSurface').style.top = layout.side === 'above' ? `${panel.visibleHeight - panel.height}px` : '0px';
+  clip.style.height = `${layout.animation ? panel.height : panel.visibleHeight}px`;
+  $('panelSurface').style.top = layout.animation ? '0px' : layout.side === 'above' ? `${panel.visibleHeight - panel.height}px` : '0px';
   $('panelSurface').style.width = `${panel.width / panel.contentScale}px`;
   $('panelSurface').style.height = `${panel.height / panel.contentScale}px`;
   $('panelSurface').classList.toggle('compact', panel.height < 410);
-  document.documentElement.style.setProperty('--panel-scale', String(panel.contentScale));
+  document.documentElement.style.setProperty('--panel-scale', String(panel.contentScale * (layout.animation?.panelScale ?? 1)));
   const box = $('lyricBox');
   const widthChanged = box.style.width !== `${layout.lyric.width}px`;
   box.style.left = `${layout.lyric.x}px`;
   box.style.top = `${layout.lyric.y}px`;
   box.style.width = `${layout.lyric.width}px`;
   box.style.height = `${layout.lyric.height}px`;
+  renderCollapsedToggle();
   if (widthChanged) queueLyricMeasure();
   $('collapseButton').textContent = layout.side === 'above' ? '⌃' : '⌄';
 }
@@ -361,6 +377,8 @@ $('lyricBox').addEventListener('keydown', event => {
 });
 
 $('collapseButton').addEventListener('click', () => api.panelToggle(false));
+$('brandToggle').addEventListener('click', () => api.panelToggle(false));
+$('collapsedToggle').addEventListener('click', () => api.panelToggle(true));
 $('closeButton').addEventListener('click', () => api.windowAction('close'));
 $('lockButton').addEventListener('click', () => api.overlayLock(!locked));
 $('visibilityButton').addEventListener('click', () => api.overlayShow(false));
@@ -421,7 +439,7 @@ api.onLyrics(next => {
 api.onTosu(next => { tosu = { ...tosu, ...next }; renderStatus(); });
 api.onOverlaySettings(next => { locked = next.locked; settings = next.settings; lastReportedHeight = -1; renderControls(); renderStyle(); });
 api.onOverlayPresence(next => { shown = next.shown; if (!shown) setEditing(false); renderControls(); });
-api.onPanelState(next => { panelOpen = next.open; panelSide = next.side; if (!panelOpen) setView('normal'); });
+api.onPanelState(next => { panelOpen = next.open; panelSide = next.side; if (!panelOpen) { setView('normal'); setEditing(false); } renderCollapsedToggle(); });
 api.onLayout(applyLayout);
 
 api.initial().then(initial => {

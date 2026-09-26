@@ -8,7 +8,7 @@ const { Readable } = require('node:stream');
 const { LyricsService } = require('./lyrics-service.cjs');
 const { normalizeTosu } = require('./osu.cjs');
 const { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, resizeFromHandle } = require('./overlay-settings.cjs');
-const { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout } = require('./combined-layout.cjs');
+const { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout } = require('./combined-layout.cjs');
 const { loadWindowConfig, persistWindowConfig } = require('./window-config.cjs');
 
 const TOSU_URL = 'https://github.com/tosuapp/tosu/releases/download/v4.26.2/tosu-windows-v4.26.2.zip';
@@ -41,7 +41,6 @@ let overlayInteractive = false;
 let panelOpen = true;
 let panelSide = 'above';
 let panelProgress = 0;
-let panelTargetY = null;
 let panelSize;
 let lyricBounds;
 let dragSession;
@@ -66,8 +65,12 @@ function updateHitTesting() {
 
 function applyLayout() {
   if (!appWindow || appWindow.isDestroyed()) return;
-  const layout = combinedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, screen.getDisplayMatching(lyricBounds).workArea, panelSize);
-  appWindow.setBounds(layout.window);
+  const area = screen.getDisplayMatching(lyricBounds).workArea;
+  const layout = animationTimer
+    ? animatedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, area, panelSize)
+    : combinedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, area, panelSize);
+  const bounds = appWindow.getBounds();
+  if (bounds.x !== layout.window.x || bounds.y !== layout.window.y || bounds.width !== layout.window.width || bounds.height !== layout.window.height) appWindow.setBounds(layout.window);
   send('layout', layout);
   updateHitTesting();
   return layout;
@@ -78,8 +81,6 @@ function finishAnimation() {
   clearInterval(animationTimer);
   animationTimer = null;
   panelProgress = panelOpen ? 1 : 0;
-  if (panelTargetY !== null) lyricBounds = { ...lyricBounds, y: panelTargetY };
-  panelTargetY = null;
   applyLayout();
 }
 
@@ -88,39 +89,31 @@ function setPanelOpen(open, animate = true) {
   clearInterval(animationTimer);
   animationTimer = null;
   const from = panelProgress;
-  const startY = lyricBounds.y;
-  let targetY = startY;
-  if (open && from < 1) {
+  if (open && from === 0) {
     const area = screen.getDisplayMatching(lyricBounds).workArea;
     panelSide = choosePanelSide(lyricBounds, area, overlaySettings, panelSize);
-    targetY = fitLyricForPanel(lyricBounds, area, overlaySettings, panelSide, panelSize).y;
+    lyricBounds = fitLyricForPanel(lyricBounds, area, overlaySettings, panelSide, panelSize);
   }
   panelOpen = !!open;
-  panelTargetY = targetY;
   send('panel-state', { open: panelOpen, side: panelSide });
   const target = panelOpen ? 1 : 0;
   if (!animate || from === target) {
-    lyricBounds = { ...lyricBounds, y: targetY };
     panelProgress = target;
-    panelTargetY = null;
     applyLayout();
     scheduleSave();
     return;
   }
   const started = Date.now();
-  const duration = 190;
+  const duration = Math.max(100, 480 * Math.abs(target - from));
   const frame = () => {
     const t = Math.min(1, (Date.now() - started) / duration);
-    const eased = 1 - (1 - t) ** 3;
+    const eased = t * t * (3 - 2 * t);
     panelProgress = from + (target - from) * eased;
-    lyricBounds = { ...lyricBounds, y: Math.round(startY + (targetY - startY) * eased) };
     applyLayout();
     if (t >= 1) {
       clearInterval(animationTimer);
       animationTimer = null;
       panelProgress = target;
-      lyricBounds = { ...lyricBounds, y: targetY };
-      panelTargetY = null;
       applyLayout();
       scheduleSave();
     }
@@ -140,9 +133,9 @@ function showControl() {
 function updateTrayMenu() {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: overlayShown ? '隐藏歌词' : '显示歌词', click: () => setOverlayShown(!overlayShown) },
+    { label: overlayShown ? '隐藏osu!lyrics' : '显示osu!lyrics', click: () => setOverlayShown(!overlayShown) },
     { label: '打开设置', click: showControl },
-    { label: overlayLocked ? '解锁歌词调整' : '锁定歌词调整', click: () => setOverlayLock(!overlayLocked) },
+    { label: overlayLocked ? '解锁位置' : '锁定位置', click: () => setOverlayLock(!overlayLocked) },
     { type: 'separator' },
     { label: '退出', click: () => { exitRequested = true; app.quit(); } },
   ]));
@@ -302,6 +295,7 @@ function createWindow() {
   const initial = combinedLayout(lyricBounds, overlaySettings, panelSide, 0, screen.getDisplayMatching(lyricBounds).workArea, panelSize);
   appWindow = new BrowserWindow({
     ...initial.window,
+    title: 'osu!lyrics',
     show: overlayShown,
     resizable: false,
     frame: false,
@@ -344,7 +338,7 @@ if (singleInstance) app.whenReady().then(() => {
   lyrics = new LyricsService(path.join(app.getPath('userData'), 'lyrics'), payload => send('lyrics', payload));
   createWindow();
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png')));
-  tray.setToolTip('osu! lyrics');
+  tray.setToolTip('osu!lyrics');
   tray.on('click', showControl);
   hotkeyRegistered = globalShortcut.register(LYRICS_HOTKEY, () => setOverlayShown(!overlayShown));
   updateTrayMenu();
