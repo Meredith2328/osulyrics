@@ -1,23 +1,20 @@
+const { presetPatch } = require('./appearance-presets.js');
+
 const DEFAULT_OVERLAY_SETTINGS = Object.freeze({
   scale: 100,
   width: 700,
-  opacity: 0,
-  theme: 'plain',
   showTranslation: true,
-  originalColor: null,
-  translationColor: null,
-  backgroundColor: null,
-  fontStyle: 'osu',
-  textEffect: 'auto',
-  alignment: 'center',
+  ...presetPatch('sakura'),
 });
+const LEGACY_OVERLAY_SETTINGS = Object.freeze({ ...DEFAULT_OVERLAY_SETTINGS, ...presetPatch('clear') });
 
 function clampNumber(value, fallback, min, max) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.round(number))) : fallback;
 }
 
-function normalizeColor(value) {
+function normalizeColor(value, fallback = null) {
+  if (value === undefined) return fallback;
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
 }
 
@@ -28,9 +25,9 @@ function normalizeOverlaySettings(input = {}) {
     opacity: clampNumber(input.opacity, DEFAULT_OVERLAY_SETTINGS.opacity, 0, 95),
     theme: ['glass', 'plain', 'contrast'].includes(input.theme) ? input.theme : DEFAULT_OVERLAY_SETTINGS.theme,
     showTranslation: input.showTranslation === false ? false : true,
-    originalColor: normalizeColor(input.originalColor),
-    translationColor: normalizeColor(input.translationColor),
-    backgroundColor: normalizeColor(input.backgroundColor),
+    originalColor: normalizeColor(input.originalColor, DEFAULT_OVERLAY_SETTINGS.originalColor),
+    translationColor: normalizeColor(input.translationColor, DEFAULT_OVERLAY_SETTINGS.translationColor),
+    backgroundColor: normalizeColor(input.backgroundColor, DEFAULT_OVERLAY_SETTINGS.backgroundColor),
     fontStyle: ['osu', 'clean', 'serif'].includes(input.fontStyle) ? input.fontStyle : DEFAULT_OVERLAY_SETTINGS.fontStyle,
     textEffect: ['auto', 'none', 'outline', 'shadow'].includes(input.textEffect) ? input.textEffect : DEFAULT_OVERLAY_SETTINGS.textEffect,
     alignment: ['center', 'left', 'right'].includes(input.alignment) ? input.alignment : DEFAULT_OVERLAY_SETTINGS.alignment,
@@ -105,4 +102,4 @@ function resizeFromHandle(bounds, settings, startPointer, pointer, handle) {
   };
 }
 
-module.exports = { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, boundsAtDimensions, resizeFromHandle };
+module.exports = { DEFAULT_OVERLAY_SETTINGS, LEGACY_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, boundsAtDimensions, resizeFromHandle };

@@ -1,13 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, boundsAtDimensions, resizeFromHandle } = require('../src/overlay-settings.cjs');
+const { DEFAULT_OVERLAY_SETTINGS, LEGACY_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, boundsAtDimensions, resizeFromHandle } = require('../src/overlay-settings.cjs');
 
 test('loads sensible defaults and rejects invalid saved values', () => {
   assert.deepEqual(normalizeOverlaySettings(), DEFAULT_OVERLAY_SETTINGS);
   assert.deepEqual(normalizeOverlaySettings({ scale: 500, width: 100, opacity: -4, theme: 'unknown', showTranslation: false }), {
-    scale: 160, width: 480, opacity: 0, theme: 'plain', showTranslation: false,
-    originalColor: null, translationColor: null, backgroundColor: null,
-    fontStyle: 'osu', textEffect: 'auto', alignment: 'center',
+    ...DEFAULT_OVERLAY_SETTINGS, scale: 160, width: 480, opacity: 0, showTranslation: false,
   });
 });
 
@@ -29,8 +27,12 @@ test('custom colors and typography normalize safely while old configs keep their
   assert.equal(invalid.translationColor, null);
   assert.equal(invalid.backgroundColor, null);
   assert.equal(invalid.fontStyle, 'osu');
-  assert.equal(invalid.textEffect, 'auto');
+  assert.equal(invalid.textEffect, DEFAULT_OVERLAY_SETTINGS.textEffect);
   assert.equal(invalid.alignment, 'center');
+  const oldConfig = normalizeOverlaySettings({ ...LEGACY_OVERLAY_SETTINGS, scale: 80, theme: 'plain' });
+  assert.equal(oldConfig.theme, 'plain');
+  assert.equal(oldConfig.translationColor, null);
+  assert.equal(oldConfig.textEffect, 'auto');
 });
 
 test('scaling and translation visibility change the overlay window size', () => {

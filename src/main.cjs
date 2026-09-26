@@ -7,7 +7,7 @@ const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
 const { LyricsService } = require('./lyrics-service.cjs');
 const { normalizeTosu } = require('./osu.cjs');
-const { DEFAULT_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, resizeFromHandle } = require('./overlay-settings.cjs');
+const { DEFAULT_OVERLAY_SETTINGS, LEGACY_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, resizeFromHandle } = require('./overlay-settings.cjs');
 const { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout } = require('./combined-layout.cjs');
 const { loadWindowConfig, persistWindowConfig } = require('./window-config.cjs');
 
@@ -273,7 +273,7 @@ async function pollTosu() {
 function createWindow() {
   const area = screen.getPrimaryDisplay().workArea;
   const config = loadWindowConfig(configFile());
-  overlaySettings = normalizeOverlaySettings(config.overlaySettings);
+  overlaySettings = normalizeOverlaySettings(config.overlaySettings ? { ...LEGACY_OVERLAY_SETTINGS, ...config.overlaySettings } : undefined);
   panelSize = normalizePanelSize(config.panelSize, overlaySettings);
   overlayLocked = config.overlayLocked === true;
   overlayShown = config.overlayShown !== false;

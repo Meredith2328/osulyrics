@@ -1,6 +1,6 @@
 {
   "name": "osu-lyrics-companion",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "private": true,
   "description": "A separate synced lyrics window for osu!",
   "main": "src/main.cjs",
@@ -17,6 +17,7 @@
   "build": {
     "appId": "local.osu-lyrics-companion",
     "productName": "osu-lyrics",
+    "electronLanguages": ["en-US", "zh-CN", "zh-TW", "ja"],
     "artifactName": "osu-lyrics-${version}-portable.${ext}",
     "directories": {
       "output": "dist"

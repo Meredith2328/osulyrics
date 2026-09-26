@@ -1,19 +1,2 @@
 @echo off
-chcp 65001 >nul
-cd /d "%~dp0"
-where node >nul 2>nul
-if errorlevel 1 (
-  echo 需要先安装 Node.js，或从终端运行本项目。
-  pause
-  exit /b 1
-)
-if not exist "node_modules\electron\dist\electron.exe" (
-  echo 首次启动，正在安装桌面运行时...
-  call npm install
-  if errorlevel 1 (
-    echo 安装失败，请检查网络连接。
-    pause
-    exit /b 1
-  )
-)
-call npm start
+call "%~dp0start.cmd" %*

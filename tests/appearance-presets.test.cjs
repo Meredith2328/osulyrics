@@ -19,7 +19,7 @@ test('presets offer distinct complete visual choices and preserve song controls'
 });
 
 test('the current custom appearance is not mislabeled as a preset', () => {
-  assert.equal(matchingPreset(normalizeOverlaySettings()), 'clear');
+  assert.equal(matchingPreset(normalizeOverlaySettings()), 'sakura');
   const custom = normalizeOverlaySettings({ ...DEFAULT_OVERLAY_SETTINGS, originalColor: '#ffcc22' });
   assert.equal(matchingPreset(custom), null);
   assert.equal(presetPatch('not-a-preset'), null);
