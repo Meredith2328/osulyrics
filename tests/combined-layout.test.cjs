@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { panelDimensions, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout } = require('../src/combined-layout.cjs');
+const { panelDimensions, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout, iconOnlyLayout } = require('../src/combined-layout.cjs');
 
 const settings = { scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true };
 const screen = { x: 0, y: 0, width: 1920, height: 900 };
@@ -137,4 +137,21 @@ test('narrow lyrics still give the icon a vertical-only path when panel is wider
   const atLyric = animatedLayout(lyric, small, 'above', 0, screen);
   assert.equal(atPanel.animation.dot.x, atLyric.animation.dot.x);
   assert.equal(atPanel.window.x + atPanel.panel.x, lyric.x);
+});
+
+test('with no lyric and a collapsed panel, only the note icon occupies the window', () => {
+  const lyric = { x: 400, y: 650, width: 700, height: 80 };
+  const normal = combinedLayout(lyric, settings, 'above', 0, screen);
+  const compact = iconOnlyLayout(normal, screen);
+  assert.deepEqual(compact.window, { x: 405, y: 642, width: 56, height: 56 });
+  assert.equal(compact.window.x + compact.lyric.x + 16, lyric.x + 16);
+  assert.equal(compact.window.y + compact.lyric.y + 3, lyric.y + 3);
+  assert.equal(compact.iconOnly, true);
+});
+
+test('an offscreen saved lyric position cannot hide the collapsed note icon', () => {
+  const lyric = { x: -580, y: 650, width: 700, height: 80 };
+  const compact = iconOnlyLayout(combinedLayout(lyric, settings, 'above', 0, screen), screen);
+  assert.ok(compact.window.x >= screen.x);
+  assert.ok(compact.window.x + compact.window.width <= screen.x + screen.width);
 });

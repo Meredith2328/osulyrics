@@ -94,7 +94,7 @@ function renderCollapsedToggle() {
   dot.style.top = `${position.y}px`;
   dot.style.opacity = String(animation ? 1 - animation.panelScale : 1);
   dot.style.pointerEvents = animation?.panelScale > .95 ? 'none' : 'auto';
-  dot.hidden = !activeVisible || (!animation && currentLayout.progress > 0);
+  dot.hidden = !shown || (!animation && currentLayout.progress > 0);
 }
 
 function setEditing(value) {
@@ -523,7 +523,7 @@ api.onLyrics(next => {
 });
 api.onTosu(next => { tosu = { ...tosu, ...next }; renderStatus(); });
 api.onOverlaySettings(next => { locked = next.locked; settings = next.settings; lastReportedHeight = -1; renderControls(); renderStyle(); });
-api.onOverlayPresence(next => { shown = next.shown; if (!shown) setEditing(false); renderControls(); });
+api.onOverlayPresence(next => { shown = next.shown; if (!shown) setEditing(false); renderControls(); renderCollapsedToggle(); });
 api.onPanelState(next => { panelOpen = next.open; panelSide = next.side; if (!panelOpen) { setView('normal'); setEditing(false); } renderCollapsedToggle(); });
 api.onLayout(applyLayout);
 

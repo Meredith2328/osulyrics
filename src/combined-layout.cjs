@@ -97,6 +97,20 @@ function combinedLayout(lyric, settings, side, progress, area = null, size = nul
   };
 }
 
+function iconOnlyLayout(layout, area) {
+  const width = 56, height = 56;
+  const dotX = layout.window.x + layout.lyric.x + 16;
+  const dotY = layout.window.y + layout.lyric.y + 3;
+  const x = Math.round(Math.max(area.x, Math.min(dotX - 11, area.x + area.width - width)));
+  const y = Math.round(Math.max(area.y, Math.min(dotY - 11, area.y + area.height - height)));
+  return {
+    ...layout,
+    window: { x, y, width, height },
+    lyric: { ...layout.lyric, x: -5, y: 8 },
+    iconOnly: true,
+  };
+}
+
 function animatedLayout(lyric, settings, side, progress, area = null, size = null) {
   const layout = combinedLayout(lyric, settings, side, 1, area, size);
   const amount = Math.max(0, Math.min(1, progress));
@@ -118,4 +132,4 @@ function animatedLayout(lyric, settings, side, progress, area = null, size = nul
   };
 }
 
-module.exports = { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, panelDimensions, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout };
+module.exports = { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, panelDimensions, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout, iconOnlyLayout };

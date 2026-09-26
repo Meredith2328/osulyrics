@@ -8,7 +8,7 @@ const { Readable } = require('node:stream');
 const { LyricsService } = require('./lyrics-service.cjs');
 const { normalizeTosu } = require('./osu.cjs');
 const { DEFAULT_OVERLAY_SETTINGS, LEGACY_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, resizeFromHandle } = require('./overlay-settings.cjs');
-const { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout } = require('./combined-layout.cjs');
+const { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout, iconOnlyLayout } = require('./combined-layout.cjs');
 const { loadWindowConfig, persistWindowConfig } = require('./window-config.cjs');
 
 const TOSU_URL = 'https://github.com/tosuapp/tosu/releases/download/v4.26.2/tosu-windows-v4.26.2.zip';
@@ -59,16 +59,22 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveCo
 
 function updateHitTesting() {
   if (!appWindow || appWindow.isDestroyed()) return;
-  const ignore = !panelOpen && !overlayInteractive;
+  const ignore = !panelOpen && !overlayInteractive && panelProgress > 0 && !animationTimer;
   appWindow.setIgnoreMouseEvents(ignore, ignore ? { forward: true } : undefined);
 }
 
-function applyLayout() {
-  if (!appWindow || appWindow.isDestroyed()) return;
+function presentLayout() {
   const area = screen.getDisplayMatching(lyricBounds).workArea;
   const layout = animationTimer
     ? animatedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, area, panelSize)
     : combinedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, area, panelSize);
+  return !animationTimer && !panelOpen && panelProgress === 0 && !overlayInteractive
+    ? iconOnlyLayout(layout, area) : layout;
+}
+
+function applyLayout() {
+  if (!appWindow || appWindow.isDestroyed()) return;
+  const layout = presentLayout();
   const bounds = appWindow.getBounds();
   if (bounds.x !== layout.window.x || bounds.y !== layout.window.y || bounds.width !== layout.window.width || bounds.height !== layout.window.height) appWindow.setBounds(layout.window);
   send('layout', layout);
@@ -292,7 +298,7 @@ function createWindow() {
     ...dimensions,
   };
   panelSide = choosePanelSide(lyricBounds, screen.getDisplayMatching(lyricBounds).workArea, overlaySettings, panelSize);
-  const initial = combinedLayout(lyricBounds, overlaySettings, panelSide, 0, screen.getDisplayMatching(lyricBounds).workArea, panelSize);
+  const initial = presentLayout();
   appWindow = new BrowserWindow({
     ...initial.window,
     title: 'osu!lyrics',
@@ -362,7 +368,7 @@ ipcMain.handle('initial', () => ({
   tosu: { status: tosuStatus, installed: !!findTosu(tosuFolder()) },
   overlay: { locked: overlayLocked, settings: overlaySettings, shown: overlayShown, hotkey: LYRICS_HOTKEY, hotkeyRegistered },
   panel: { open: panelOpen, side: panelSide },
-  layout: combinedLayout(lyricBounds, overlaySettings, panelSide, panelProgress, screen.getDisplayMatching(lyricBounds).workArea, panelSize),
+  layout: presentLayout(),
 }));
 ipcMain.handle('install-tosu', installTosu);
 ipcMain.handle('start-tosu', () => startTosu());
@@ -412,7 +418,7 @@ ipcMain.on('overlay-visibility', (event, visible) => {
   if (!appWindow || event.sender !== appWindow.webContents) return;
   overlayInteractive = !!visible;
   if (!overlayInteractive) dragSession = resizeSession = null;
-  updateHitTesting();
+  applyLayout();
 });
 ipcMain.on('overlay-content-height', (event, measuredHeight) => {
   if (!appWindow || event.sender !== appWindow.webContents || dragSession || resizeSession) return;
