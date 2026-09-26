@@ -1,4 +1,5 @@
 const api = window.osuLyrics;
+const presetsApi = window.osuAppearancePresets;
 const $ = id => document.getElementById(id);
 let state = { connected: false, song: null, positionMs: 0, sampledAt: Date.now(), playing: false };
 let lyrics = { status: 'idle', lines: [], candidates: [], offsetMs: 0 };
@@ -216,6 +217,7 @@ function renderStyle() {
   $('fontStyleSelect').value = settings.fontStyle;
   $('textEffectSelect').value = settings.textEffect;
   $('alignmentSelect').value = settings.alignment;
+  renderPresetSelection();
   queueLyricMeasure();
 }
 
@@ -231,6 +233,34 @@ function setAppearanceTab(next) {
   for (const name of ['basic', 'colors', 'typography']) {
     $(`${name}Tab`).setAttribute('aria-selected', String(name === next));
     $(`${name}Settings`).hidden = name !== next;
+  }
+}
+
+function buildPresetSwatches() {
+  const strip = $('presetStrip');
+  for (const preset of presetsApi.PRESETS) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'preset-swatch';
+    button.dataset.preset = preset.id;
+    button.setAttribute('aria-pressed', 'false');
+    button.setAttribute('aria-label', `${preset.name}：${preset.hint}`);
+    button.title = `${preset.name} · ${preset.hint}`;
+    button.classList.toggle('plain', !!preset.preview.plain);
+    button.style.setProperty('--preset-original', preset.preview.original);
+    button.style.setProperty('--preset-translation', preset.preview.translation);
+    button.style.setProperty('--preset-background', preset.preview.background);
+    button.addEventListener('click', () => api.updateOverlaySettings(presetsApi.presetPatch(preset.id)));
+    strip.appendChild(button);
+  }
+}
+
+function renderPresetSelection() {
+  const selected = presetsApi.matchingPreset(settings);
+  for (const button of $('presetStrip').children) {
+    const active = button.dataset.preset === selected;
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
   }
 }
 
@@ -497,6 +527,7 @@ api.onOverlayPresence(next => { shown = next.shown; if (!shown) setEditing(false
 api.onPanelState(next => { panelOpen = next.open; panelSide = next.side; if (!panelOpen) { setView('normal'); setEditing(false); } renderCollapsedToggle(); });
 api.onLayout(applyLayout);
 
+buildPresetSwatches();
 api.initial().then(initial => {
   state = initial.state;
   lyrics = initial.lyrics;

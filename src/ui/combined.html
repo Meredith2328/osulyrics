@@ -38,6 +38,7 @@
           <button id="basicTab" type="button" aria-selected="true">基础</button>
           <button id="colorsTab" type="button" aria-selected="false">颜色</button>
           <button id="typographyTab" type="button" aria-selected="false">排版</button>
+          <span id="presetStrip" class="preset-strip" role="group" aria-label="快速样式"></span>
         </nav>
         <div id="basicSettings" class="settings-list">
           <div class="setting-row"><label>歌词大小</label><div class="setting-control"><div class="stepper large"><button id="scaleBack" aria-label="缩小歌词">−</button><output id="scaleValue">100%</output><button id="scaleForward" aria-label="放大歌词">＋</button></div></div></div>
@@ -82,6 +83,7 @@
   </div>
   <button id="collapsedToggle" class="collapsed-toggle" type="button" title="展开osu!lyrics" aria-label="展开osu!lyrics" hidden>♪</button>
   <script src="../playback-clock.js"></script>
+  <script src="../appearance-presets.js"></script>
   <script src="combined.js"></script>
 </body>
 </html>
