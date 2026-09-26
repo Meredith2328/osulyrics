@@ -59,6 +59,9 @@ class LyricsService {
     this.generation = 0;
     this.searchRun = 0;
     this.selectionToken = 0;
+    this.metadataRevision = 0;
+    this.metadataChangedAt = 0;
+    this.pendingInitialSearch = false;
     this.candidates = [];
     this.payload = { status: 'idle', lines: [], candidates: [], offsetMs: 0 };
     fs.mkdirSync(folder, { recursive: true });
@@ -84,12 +87,66 @@ class LyricsService {
     fs.writeFileSync(file, JSON.stringify({ ...this.readMeta(), ...patch }, null, 2), 'utf8');
   }
 
+  async waitForMetadata(generation, revision = null) {
+    const deadline = Date.now() + 1800;
+    while (Date.now() < deadline) {
+      if (generation !== this.generation || (revision !== null && revision !== this.metadataRevision)) return false;
+      const remaining = 450 - (Date.now() - this.metadataChangedAt);
+      if (remaining <= 0) return true;
+      await new Promise(resolve => setTimeout(resolve, Math.min(remaining, deadline - Date.now())));
+    }
+    return generation === this.generation && (revision === null || revision === this.metadataRevision);
+  }
+
+  automaticLyricsMayChange(meta) {
+    return meta.selectionMode !== 'manual' && (!meta.source || meta.source === 'LRCLIB');
+  }
+
+  cachedAutoNeedsReview(meta, song, lines) {
+    if (meta.source !== 'LRCLIB' || !this.automaticLyricsMayChange(meta)) return false;
+    const knownDuration = Number(meta.audioDurationMs);
+    const currentDuration = Number(song?.durationMs);
+    const durationMismatch = !Number.isFinite(knownDuration) || knownDuration <= 0 ||
+      (currentDuration > 0 && Math.abs(knownDuration - currentDuration) > 5000);
+    const oldEnglish = !meta.selectionMode &&
+      lyricLanguage(serializeLrc(lines || [])) === 'en' &&
+      !/\b(?:english|eng(?:lish)?\s*ver(?:sion)?|e-side)\b/i.test([song?.title, song?.difficulty].join(' '));
+    return durationMismatch || oldEnglish;
+  }
+
   async setSong(song) {
-    if (this.song?.key === song?.key) return;
+    const sameSong = (!this.song && !song) ||
+      (this.song && song && this.song.key === song.key && fileId(this.song) === fileId(song));
+    if (sameSong) {
+      if (song && this.song) {
+        const previous = this.song;
+        this.song = song;
+        const identityChanged = ['title', 'artist', 'romanizedTitle', 'romanizedArtist', 'difficulty']
+          .some(field => previous[field] !== song[field]);
+        const changed = identityChanged || ['durationMs', 'lastObjectMs']
+          .some(field => previous[field] !== song[field]);
+        if (changed) {
+          this.metadataChangedAt = Date.now();
+          const revision = ++this.metadataRevision;
+          if (!this.pendingInitialSearch && this.automaticLyricsMayChange(this.readMeta()) &&
+              await this.waitForMetadata(this.generation, revision)) {
+            const meta = this.readMeta();
+            if (this.automaticLyricsMayChange(meta) &&
+                (!meta.source || identityChanged || this.cachedAutoNeedsReview(meta, this.song, this.payload.lines))) {
+              await this.search('', this.generation);
+            }
+          }
+        }
+      }
+      return;
+    }
     this.generation++;
     this.searchAbort?.abort();
     this.searchRun++;
     this.selectionToken++;
+    this.metadataRevision++;
+    this.metadataChangedAt = Date.now();
+    this.pendingInitialSearch = false;
     if (this.watchedFile) fs.unwatchFile(this.watchedFile, this.watchHandler);
     this.watchedFile = null;
     this.song = song;
@@ -110,24 +167,30 @@ class LyricsService {
     };
     fs.watchFile(paths.lrc, { interval: 800 }, this.watchHandler);
     if (this.loadLocal(false)) {
-      if (meta.source === 'LRCLIB' && !meta.selectionMode &&
-          lyricLanguage(serializeLrc(this.payload.lines)) === 'en' &&
-          !/\b(?:english|eng(?:lish)?\s*ver(?:sion)?|e-side)\b/i.test([song.title, song.difficulty].join(' '))) {
-        // Older builds could cache an English edition before discovering the Japanese one.
-        await new Promise(resolve => setTimeout(resolve, 450));
-        if (generation === this.generation) await this.search('', generation);
-        return;
-      }
       if (meta.source === 'LRCLIB' && !this.payload.lines.some(line => line.translation)) {
         this.emit({ translationSource: '正在翻译…' });
         this.translate(this.payload.lines, generation, ++this.selectionToken);
       }
+      if (this.cachedAutoNeedsReview(meta, this.song, this.payload.lines)) {
+        this.pendingInitialSearch = true;
+        try {
+          if (await this.waitForMetadata(generation) &&
+              this.cachedAutoNeedsReview(this.readMeta(), this.song, this.payload.lines)) {
+            await this.search('', generation);
+          }
+        } finally {
+          if (generation === this.generation) this.pendingInitialSearch = false;
+        }
+      }
       return;
     }
-    // Song select changes rapidly; wait until the map is stable before querying LRCLIB.
-    await new Promise(resolve => setTimeout(resolve, 450));
-    if (generation !== this.generation) return;
-    await this.search('', generation);
+    // tosu can report the new checksum before its audio length and live time catch up.
+    this.pendingInitialSearch = true;
+    try {
+      if (await this.waitForMetadata(generation)) await this.search('', generation);
+    } finally {
+      if (generation === this.generation) this.pendingInitialSearch = false;
+    }
   }
 
   loadLocal(edited) {
@@ -152,6 +215,7 @@ class LyricsService {
     const abort = new AbortController();
     this.searchAbort = abort;
     const song = this.song;
+    const metadataRevision = this.metadataRevision;
     const searchRun = ++this.searchRun;
     const existingLines = this.payload.lines || [];
     this.emit({ status: 'searching', message: '正在搜索带时间戳的歌词…', candidates: [] });
@@ -204,6 +268,7 @@ class LyricsService {
         } catch (error) { if (!(error instanceof HttpError && error.status === 404)) lastError = error; }
       }
       if (generation !== this.generation || searchRun !== this.searchRun) return;
+      if (metadataRevision !== this.metadataRevision) return this.search(query, generation);
       if (!all.size && lastError) throw lastError;
       this.candidates = rankLyrics(song, [...all.values()]);
       const summary = this.candidates.slice(0, 12).map(item => ({ id: item.id, title: item.trackName, artist: item.artistName, duration: item.duration, score: item.matchScore, language: item.language }));
@@ -212,6 +277,8 @@ class LyricsService {
       if (best) await this.select(best.id, generation, 'auto');
       else this.emit({ status: existingLines.length ? 'ready' : 'choose', lines: existingLines, message: summary.length ? '请选择匹配的歌词版本' : '没有找到带时间戳的歌词。可以导入或编辑本地 LRC。' });
     } catch (error) {
+      if (generation === this.generation && searchRun === this.searchRun &&
+          metadataRevision !== this.metadataRevision) return this.search(query, generation);
       if (generation === this.generation && searchRun === this.searchRun) this.emit({ status: existingLines.length ? 'ready' : 'error', lines: existingLines, message: `歌词搜索失败：${error.message}` });
     }
   }
@@ -225,7 +292,9 @@ class LyricsService {
     if (!lines.length) return false;
     this.lastWritten = serializeLrc(lines);
     fs.writeFileSync(this.paths().lrc, this.lastWritten, 'utf8');
-    this.writeMeta({ source: 'LRCLIB', selectedId: item.id, selectionMode, translationSource: lines.some(l => l.translation) ? '歌词自带' : '' });
+    this.writeMeta({ source: 'LRCLIB', selectedId: item.id, selectionMode,
+      audioDurationMs: Number(this.song.durationMs) || 0, lyricsDurationMs: Math.round(Number(item.duration) * 1000) || 0,
+      translationSource: lines.some(l => l.translation) ? '歌词自带' : '' });
     this.emit({ status: 'ready', lines, source: 'LRCLIB', translationSource: lines.some(l => l.translation) ? '歌词自带' : '正在翻译…', message: '' });
     if (!lines.some(l => l.translation)) this.translate(lines, generation, selectionToken);
     return true;

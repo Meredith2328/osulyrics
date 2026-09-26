@@ -56,6 +56,138 @@ test('uses audio length instead of the final hit object for lyric version select
   assert.equal(chooseAutomaticMatch(song, candidates).id, 2);
 });
 
+test('uses the corrected osu audio length when tosu updates it after the song identity', async () => {
+  const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-switch-clock-')), () => {}, {
+    requestLyrics: async () => [
+      { id: 1, trackName: 'Song', artistName: 'Artist', duration: 150, syncedLyrics: '[00:01.00]古い歌\n[00:01.00]旧歌' },
+      { id: 2, trackName: 'Song', artistName: 'Artist', duration: 100, syncedLyrics: '[00:01.00]新しい歌\n[00:01.00]新歌' },
+    ],
+    wait: async () => {},
+  });
+  const first = { key: 'new-checksum', set: 42, title: 'Song', artist: 'Artist', durationMs: 150000 };
+  const loading = service.setSong(first);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await service.setSong({ ...first, durationMs: 100000 });
+    await loading;
+    assert.equal(service.song.durationMs, 100000);
+    assert.equal(service.readMeta().selectedId, 2);
+    assert.equal(service.payload.lines[0].original, '新しい歌');
+  } finally {
+    if (service.watchedFile) fs.unwatchFile(service.watchedFile, service.watchHandler);
+  }
+});
+
+test('does not select lyrics using audio metadata that changed during the online request', async () => {
+  let changed = false;
+  const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-search-race-')), () => {}, {
+    requestLyrics: async () => {
+      if (!changed) {
+        changed = true;
+        service.song = { ...service.song, durationMs: 100000 };
+        service.metadataRevision++;
+      }
+      return [
+        { id: 1, trackName: 'Song', artistName: 'Artist', duration: 150, syncedLyrics: '[00:01.00]古い歌\n[00:01.00]旧歌' },
+        { id: 2, trackName: 'Song', artistName: 'Artist', duration: 100, syncedLyrics: '[00:01.00]新しい歌\n[00:01.00]新歌' },
+      ];
+    },
+    wait: async () => {},
+  });
+  service.song = { key: 'new-checksum', set: 42, title: 'Song', artist: 'Artist', durationMs: 150000 };
+  await service.search();
+  assert.equal(service.readMeta().selectedId, 2);
+});
+
+test('rechecks an automatic cache when a same-set song later reports a different audio length', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-cache-length-'));
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => [
+      { id: 1, trackName: 'Song', artistName: 'Artist', duration: 150, syncedLyrics: '[00:01.00]古い歌\n[00:01.00]旧歌' },
+      { id: 2, trackName: 'Song', artistName: 'Artist', duration: 100, syncedLyrics: '[00:01.00]新しい歌\n[00:01.00]新歌' },
+    ],
+    wait: async () => {},
+  });
+  const first = { key: 'same-map', set: 42, title: 'Song', artist: 'Artist', durationMs: 150000 };
+  service.song = first;
+  fs.writeFileSync(service.paths().lrc, '[00:01.00]古い歌\n[00:01.00]旧歌\n');
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'auto', selectedId: 1, audioDurationMs: 150000 }));
+  service.song = null;
+  try {
+    await service.setSong(first);
+    assert.equal(service.readMeta().selectedId, 1);
+    await service.setSong({ ...first, durationMs: 100000 });
+    assert.equal(service.readMeta().selectedId, 2);
+    assert.equal(service.payload.lines[0].original, '新しい歌');
+  } finally {
+    if (service.watchedFile) fs.unwatchFile(service.watchedFile, service.watchHandler);
+  }
+});
+
+test('a temporarily stale tosu length does not refetch an already correct lyric cache', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-cache-settle-'));
+  let searches = 0;
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => { searches++; return []; },
+    wait: async () => {},
+  });
+  const first = { key: 'new-checksum', set: 42, title: 'Song', artist: 'Artist', durationMs: 150000 };
+  service.song = first;
+  fs.writeFileSync(service.paths().lrc, '[00:01.00]正しい歌\n[00:01.00]正确的歌\n');
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'auto', selectedId: 2, audioDurationMs: 100000 }));
+  service.song = null;
+  const loading = service.setSong(first);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await service.setSong({ ...first, durationMs: 100000 });
+    await loading;
+    assert.equal(searches, 0);
+    assert.equal(service.payload.lines[0].original, '正しい歌');
+  } finally {
+    if (service.watchedFile) fs.unwatchFile(service.watchedFile, service.watchHandler);
+  }
+});
+
+test('losing the current song clears lyrics even when the old metadata lacks a checksum', async () => {
+  const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-clear-song-')), () => {});
+  service.song = { title: 'Song', artist: 'Artist' };
+  service.payload = { status: 'ready', lines: [{ time: 1, original: '歌' }] };
+  await service.setSong(null);
+  assert.equal(service.song, null);
+  assert.equal(service.payload.status, 'idle');
+  assert.deepEqual(service.payload.lines, []);
+});
+
+test('rechecks a legacy automatic cache without replacing a manually chosen version', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-cache-legacy-'));
+  let searches = 0;
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => {
+      searches++;
+      return [{ id: 2, trackName: 'Song', artistName: 'Artist', duration: 100, syncedLyrics: '[00:01.00]新しい歌\n[00:01.00]新歌' }];
+    },
+    wait: async () => {},
+  });
+  const song = { key: 'same-map', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+  service.song = song;
+  fs.writeFileSync(service.paths().lrc, '[00:01.00]古い歌\n[00:01.00]旧歌\n');
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'auto', selectedId: 1 }));
+  service.song = null;
+  try {
+    await service.setSong(song);
+    assert.equal(service.readMeta().selectedId, 2);
+    assert.ok(searches > 0);
+    fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'manual', selectedId: 1 }));
+    fs.writeFileSync(service.paths().lrc, '[00:01.00]手动歌词\n');
+    await service.setSong(null);
+    await service.setSong(song);
+    assert.equal(service.readMeta().selectedId, 1);
+    assert.equal(service.payload.lines[0].original, '手动歌词');
+  } finally {
+    if (service.watchedFile) fs.unwatchFile(service.watchedFile, service.watchHandler);
+  }
+});
+
 test('TV Size titles search the unsuffixed Japanese name and choose the short recording', async () => {
   const requests = [];
   const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-tv-')), () => {}, {
