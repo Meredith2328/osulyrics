@@ -163,8 +163,11 @@ function renderControls() {
   $('lockButton').setAttribute('aria-pressed', String(locked));
   $('panelHeader').classList.toggle('drag-locked', locked);
   $('panelSurface').classList.toggle('locked', locked);
+  for (const id of ['brandToggle', 'collapsedToggle']) $(id).classList.toggle('draggable', !locked);
+  $('brandToggle').title = locked ? '收起设置' : '拖动移动位置；点击收起设置';
+  $('collapsedToggle').title = locked ? '展开osu!lyrics' : '拖动移动位置；点击展开osu!lyrics';
   $('styleButton').disabled = locked;
-  $('visibilityButton').textContent = shown ? '隐藏osu!lyrics' : '显示osu!lyrics';
+  $('visibilityButton').textContent = shown ? '完全隐藏osu!lyrics' : '显示osu!lyrics';
   if (locked && view === 'style') setView('normal');
   const box = $('lyricBox');
   box.classList.toggle('locked', locked);
@@ -453,8 +456,51 @@ $('lyricBox').addEventListener('keydown', event => {
   if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); api.panelToggle(true); }
 });
 
-$('brandToggle').addEventListener('click', () => api.panelToggle(false));
-$('collapsedToggle').addEventListener('click', () => api.panelToggle(true));
+function bindIconDrag(id, opensPanel) {
+  const button = $(id);
+  let pointerId = null, origin = null, active = false, moved = false, suppressClick = false;
+  function finish() {
+    if (pointerId === null) return;
+    const captured = pointerId;
+    pointerId = null;
+    if (button.hasPointerCapture(captured)) button.releasePointerCapture(captured);
+    if (active) api.overlayDragEnd();
+    if (moved) {
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 250);
+    }
+    origin = null;
+    active = moved = false;
+    button.classList.remove('dragging');
+  }
+  button.addEventListener('pointerdown', async event => {
+    if (locked || event.button !== 0) return;
+    event.preventDefault();
+    pointerId = event.pointerId;
+    origin = { x: event.screenX, y: event.screenY };
+    button.setPointerCapture(pointerId);
+    const started = await api.overlayDragStart({ ...origin, source: 'icon' });
+    if (pointerId !== event.pointerId) { if (started) api.overlayDragEnd(); return; }
+    if (!started) { finish(); return; }
+    active = true;
+  });
+  button.addEventListener('pointermove', event => {
+    if (pointerId !== event.pointerId || !active) return;
+    if (Math.abs(event.screenX - origin.x) + Math.abs(event.screenY - origin.y) > 5) moved = true;
+    if (!moved) return;
+    button.classList.add('dragging');
+    api.overlayDragMove({ x: event.screenX, y: event.screenY });
+  });
+  button.addEventListener('pointerup', event => { if (pointerId === event.pointerId) finish(); });
+  button.addEventListener('pointercancel', event => { if (pointerId === event.pointerId) finish(); });
+  button.addEventListener('lostpointercapture', event => { if (pointerId === event.pointerId) finish(); });
+  button.addEventListener('click', () => {
+    if (suppressClick) { suppressClick = false; return; }
+    api.panelToggle(opensPanel);
+  });
+}
+bindIconDrag('brandToggle', false);
+bindIconDrag('collapsedToggle', true);
 $('lockButton').addEventListener('click', () => api.overlayLock(!locked));
 $('visibilityButton').addEventListener('click', () => api.overlayShow(false));
 $('styleButton').addEventListener('click', () => setView('style'));

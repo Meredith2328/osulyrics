@@ -82,6 +82,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   cursor: pointer;
 }
 .brand-dot:hover { filter: brightness(1.12); }
+.brand-dot.draggable, .collapsed-toggle.draggable { cursor: grab; touch-action: none; }
+.brand-dot.dragging, .collapsed-toggle.dragging { cursor: grabbing; }
 .collapsed-toggle {
   position: absolute;
   z-index: 30;
@@ -176,9 +178,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .setup-panel { justify-content: space-between; color: #d1c5dc; font-size: 13px; }
 .setup-panel .action-button { min-width: 82px; }
 .offset-row { min-height: 47px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
-.offset-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.offset-label strong { font-size: 13px; line-height: 17px; font-weight: 650; }
-.offset-label small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #a99fb4; font-size: 12px; line-height: 16px; }
+.ready-note { min-width: 0; color: #f0d9ed; font-size: 14px; line-height: 19px; font-weight: 650; }
+.offset-control { flex: none; display: flex; align-items: center; gap: 9px; }
+.offset-label { color: #d7cadd; font-size: 13px; line-height: 18px; font-weight: 600; white-space: nowrap; }
 .stepper { height: 36px; display: flex; flex: none; align-items: center; overflow: hidden; border: 1px solid #ffffff38; border-radius: 8px; background: #1c1922; font-variant-numeric: tabular-nums; }
 .stepper button { width: 36px; height: 35px; border: 0; background: transparent; color: #f1eaf7; font-size: 19px; font-weight: 400; line-height: 1; }
 .stepper button:hover:not(:disabled) { background: #ffffff1a; }

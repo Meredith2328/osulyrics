@@ -16,7 +16,7 @@
           <button id="lockButton" class="header-lock" type="button" title="锁定位置" aria-label="锁定位置" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="10" width="14" height="11" rx="2"/><path class="lock-closed" d="M8 10V7a4 4 0 0 1 8 0v3"/><path class="lock-open" d="M8 10V7a4 4 0 0 1 7.5-2"/></svg>
           </button>
-          <button id="visibilityButton" class="header-visibility" type="button">隐藏osu!lyrics</button>
+          <button id="visibilityButton" class="header-visibility" type="button">完全隐藏osu!lyrics</button>
         </div>
       </header>
 
@@ -29,7 +29,7 @@
           <div id="searchRow" class="search-row" hidden><input id="searchInput" type="search" placeholder="输入曲名或歌手"><button id="submitSearch" class="action-button primary">搜索</button><button id="cancelSearch" class="quiet-button">取消</button></div>
           <div id="setupPanel" class="setup-panel" hidden><span id="setupDescription">连接 tosu 后读取歌曲</span><button id="setupButton" class="action-button primary">启动</button></div>
         </div>
-        <div class="offset-row"><div class="offset-label"><strong>歌词校时</strong><small>− 提前 0.5 秒 · ＋ 延后 0.5 秒</small></div><div class="stepper"><button id="offsetBack" aria-label="歌词提前半秒">−</button><output id="offsetValue">0.0s</output><button id="offsetForward" aria-label="歌词延后半秒">＋</button></div></div>
+        <div class="offset-row"><span class="ready-note">准备好之后点击粉色按钮，之后开始游玩吧！</span><div class="offset-control"><span class="offset-label">歌词校时</span><div class="stepper"><button id="offsetBack" aria-label="歌词提前半秒">−</button><output id="offsetValue">0.0s</output><button id="offsetForward" aria-label="歌词延后半秒">＋</button></div></div></div>
       </section>
 
       <section id="styleView" class="panel-view style-view" hidden>

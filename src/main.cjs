@@ -434,10 +434,15 @@ ipcMain.on('overlay-content-height', (event, measuredHeight) => {
   scheduleSave();
 });
 ipcMain.handle('overlay-drag-start', (event, pointer) => {
-  if (!appWindow || event.sender !== appWindow.webContents || overlayLocked || (!overlayInteractive && !panelOpen) || resizeSession || animationTimer) return false;
+  const icon = pointer?.source === 'icon';
+  if (!appWindow || event.sender !== appWindow.webContents || overlayLocked || (!overlayInteractive && !panelOpen && !icon) || resizeSession || animationTimer) return false;
   const x = Number(pointer?.x), y = Number(pointer?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
-  dragSession = { lyric: { ...lyricBounds }, pointer: { x, y } };
+  const layout = icon && !panelOpen && !overlayInteractive ? presentLayout() : null;
+  const lyric = layout?.iconOnly
+    ? { ...lyricBounds, x: layout.window.x + layout.lyric.x, y: layout.window.y + layout.lyric.y }
+    : { ...lyricBounds };
+  dragSession = { lyric, pointer: { x, y } };
   return true;
 });
 ipcMain.on('overlay-drag-move', (event, pointer) => {
