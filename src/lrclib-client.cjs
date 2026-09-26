@@ -1,6 +1,6 @@
 const { setTimeout: wait } = require('node:timers/promises');
 
-const USER_AGENT = 'osu-lyrics-companion/0.4 (personal desktop application)';
+const USER_AGENT = 'osu!lyrics/0.4.7 (https://github.com/Meredith2328/osulyrics)';
 
 class HttpError extends Error {
   constructor(status, retryAfterMs = 0) {

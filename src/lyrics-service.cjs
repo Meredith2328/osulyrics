@@ -5,7 +5,7 @@ const { setTimeout: wait } = require('node:timers/promises');
 const { parseLrc, serializeLrc, rankLyrics, chooseAutomaticMatch, lyricLanguage } = require('./lyrics.cjs');
 const { requestJson, HttpError } = require('./lrclib-client.cjs');
 
-const CLIENT = 'osu-lyrics-companion/0.1 (personal desktop lyrics window)';
+const CLIENT = 'osu!lyrics/0.4.7 (https://github.com/Meredith2328/osulyrics)';
 
 function stripVersionSuffix(value) {
   return String(value || '').normalize('NFKC').trim()
