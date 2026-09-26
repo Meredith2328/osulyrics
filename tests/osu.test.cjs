@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeTosu, advancePosition } = require('../src/osu.cjs');
+const { normalizeTosu, advancePosition, shouldDisplayLyrics } = require('../src/osu.cjs');
 const { fileId } = require('../src/lyrics-service.cjs');
 const { LyricsService } = require('../src/lyrics-service.cjs');
 const fs = require('node:fs');
@@ -22,9 +22,31 @@ test('reads the current lazer beatmap and playback position from tosu v2', () =>
 });
 
 test('does not advance paused playback and resets on retry', () => {
-  assert.equal(advancePosition({ positionMs: 42000, sampledAt: 1000, playing: false }, 1500), 42000);
-  assert.equal(advancePosition({ positionMs: 1000, sampledAt: 1000, playing: true }, 1500), 1500);
-  assert.equal(advancePosition({ positionMs: 1000, sampledAt: 1000, playing: true }, 3000), 1500);
+  const paused = normalizeTosu({ state: { name: 'play' }, game: { paused: true }, beatmap: { artist: 'A', title: 'Song', time: { live: 42000 } } }, 1000);
+  assert.equal(paused.playing, false);
+  assert.equal(advancePosition(paused, 1500), 42000);
+  assert.equal(advancePosition({ positionMs: 1000, sampledAt: 1000, connected: true, playing: true, rate: 1 }, 1100), 1100);
+  assert.equal(advancePosition({ positionMs: 1000, sampledAt: 1000, connected: true, playing: true, rate: 1 }, 3000), 1180);
+});
+
+test('interpolates only briefly and uses the active gameplay clock rate', () => {
+  const state = normalizeTosu({
+    state: { name: 'play' }, game: { paused: false },
+    beatmap: { artist: 'A', title: 'Song', time: { live: 30000 } },
+    play: { mods: { rate: 1.5 } },
+  }, 1000);
+  assert.equal(state.rate, 1.5);
+  assert.equal(advancePosition(state, 1120), 30180);
+  assert.equal(advancePosition({ ...state, positionMs: 12000, sampledAt: 2000 }, 2100), 12150);
+});
+
+test('holds lyrics on pause but clears them at the audio end or results screen', () => {
+  const song = { durationMs: 90000 };
+  assert.equal(shouldDisplayLyrics({ connected: true, state: 'play', song, playing: false }, 42000), true);
+  assert.equal(shouldDisplayLyrics({ connected: true, state: 'play', song }, 89999), true);
+  assert.equal(shouldDisplayLyrics({ connected: true, state: 'play', song }, 90000), false);
+  assert.equal(shouldDisplayLyrics({ connected: true, state: 'selectPlay', song }, 90000), false);
+  assert.equal(shouldDisplayLyrics({ connected: true, state: 'resultsScreen', song }, 42000), false);
 });
 
 test('treats song selection as timed audio playback', () => {
@@ -34,7 +56,8 @@ test('treats song selection as timed audio playback', () => {
   }, 1000);
   assert.equal(state.playing, true);
   assert.equal(state.positionMs, 35500);
-  assert.equal(advancePosition(state, 1200), 35700);
+  assert.equal(state.rate, 1);
+  assert.equal(advancePosition(state, 1100), 35600);
 });
 
 test('uses a pack difficulty as the real song metadata', () => {

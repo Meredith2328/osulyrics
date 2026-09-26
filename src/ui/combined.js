@@ -44,7 +44,7 @@ function timeLabel(ms) {
 }
 
 function currentTimeMs() {
-  return (state.positionMs || 0) + (state.playing && state.connected ? Math.max(0, Math.min(500, Date.now() - state.sampledAt)) : 0);
+  return window.osuPlaybackClock.advancePosition(state, Date.now());
 }
 
 function activeAt(seconds) {
@@ -58,22 +58,13 @@ function activeAt(seconds) {
   return low - 1;
 }
 
-function displayedIndex(seconds) {
-  const lines = lyrics.lines || [];
-  let index = activeAt(seconds);
-  if (!/^select(play|multi)$/i.test(state.state || '')) return index;
-  if (index >= 0 && lines[index]?.original) return index;
-  for (let next = Math.max(0, index + 1); next < lines.length; next++) if (lines[next].original) return next;
-  for (let previous = index; previous >= 0; previous--) if (lines[previous].original) return previous;
-  return -1;
-}
-
 function renderLyrics() {
-  const index = displayedIndex((currentTimeMs() - (lyrics.offsetMs || 0)) / 1000);
-  if (index === activeIndex) return;
-  activeIndex = index;
+  const elapsed = currentTimeMs();
+  const index = activeAt((elapsed - (lyrics.offsetMs || 0)) / 1000);
   const line = lyrics.lines?.[index];
-  const visible = !!(state.connected && line?.original);
+  const visible = !!(line?.original && window.osuPlaybackClock.shouldDisplayLyrics(state, elapsed));
+  if (index === activeIndex && visible === activeVisible) return;
+  activeIndex = index;
   $('lyricBox').hidden = !visible;
   if (visible) {
     $('original').textContent = line.original;
@@ -229,8 +220,8 @@ function applyLayout(layout) {
 }
 
 function tick() {
-  const elapsed = currentTimeMs();
   const duration = state.song?.durationMs || state.song?.lastObjectMs || 0;
+  const elapsed = Math.min(currentTimeMs(), duration > 0 ? duration : Infinity);
   $('elapsed').textContent = timeLabel(elapsed);
   $('duration').textContent = duration > 0 ? timeLabel(duration) : '--:--';
   $('progress').style.width = duration > 0 ? `${Math.min(100, elapsed / duration * 100)}%` : '0%';
@@ -406,7 +397,9 @@ $('setupButton').addEventListener('click', async () => {
 
 api.onState(next => {
   const changedSong = state.song?.key !== next.song?.key;
-  if (changedSong || state.state !== next.state || state.connected !== next.connected) activeIndex = -2;
+  const changedPhase = state.state !== next.state || state.connected !== next.connected;
+  const changedMetadata = state.song?.title !== next.song?.title || state.song?.artist !== next.song?.artist;
+  if (changedSong || changedPhase) activeIndex = -2;
   if (changedSong) {
     setView('normal');
     closeSearch();
@@ -414,8 +407,7 @@ api.onState(next => {
     showCandidatesAfterSearch = false;
   }
   state = next;
-  renderTrack();
-  renderStatus();
+  if (changedSong || changedPhase || changedMetadata) { renderTrack(); renderStatus(); }
   renderLyrics();
 });
 api.onLyrics(next => {

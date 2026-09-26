@@ -273,7 +273,7 @@ async function pollTosu() {
     }
     if (!launchAttempted && findTosu(tosuFolder())) startTosu();
   } finally {
-    if (!stopping) pollTimer = setTimeout(pollTosu, 300);
+    if (!stopping) pollTimer = setTimeout(pollTosu, 100);
   }
 }
 

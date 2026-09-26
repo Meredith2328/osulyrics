@@ -1,3 +1,5 @@
+const { advancePosition, shouldDisplayLyrics } = require('./playback-clock.js');
+
 function parseCompilationDifficulty(artist, title, version) {
   if (!/^(?:various artists|various|v\.?a\.?|multiple artists)$/i.test(String(artist || '').trim())) return null;
   if (!/(?:\bpack\b|\bcompilation\b|\bcollection\b|\bstarter\b|\bbeginner\b|合集|曲包)/i.test(String(title || ''))) return null;
@@ -39,13 +41,9 @@ function normalizeTosu(data, sampledAt = Date.now()) {
     song,
     positionMs: Math.max(0, Number(map.time?.live) || 0),
     sampledAt,
-    playing: /^(play|playing|selectplay|selectmulti|songselect|menu)$/i.test(state),
+    playing: /^(play|playing|selectplay|selectmulti|songselect|menu)$/i.test(state) && data?.game?.paused !== true,
+    rate: /^play(?:ing)?$/i.test(state) && Number(data?.play?.mods?.rate) > 0 ? Number(data.play.mods.rate) : 1,
   };
 }
 
-function advancePosition(state, now = Date.now()) {
-  if (!state?.playing) return state?.positionMs || 0;
-  return (state.positionMs || 0) + Math.max(0, Math.min(500, now - state.sampledAt));
-}
-
-module.exports = { normalizeTosu, advancePosition };
+module.exports = { normalizeTosu, advancePosition, shouldDisplayLyrics };
