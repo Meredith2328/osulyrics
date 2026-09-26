@@ -8,7 +8,7 @@ A standalone Windows lyrics overlay for osu!lazer. It reads the current beatmap 
 
 ## Getting started
 
-1. Download `osu-lyrics-0.4.8-portable.exe` from [Releases](https://github.com/Meredith2328/osulyrics/releases) and run it. No Node.js installation is needed. The EXE is currently unsigned, so Windows may show an “Unknown publisher” warning; use the release's `SHA256SUMS.txt` to verify your download.
+1. Download the latest `osu-lyrics-x.x.x-portable.exe` from [Releases](https://github.com/Meredith2328/osulyrics/releases) and run it. No Node.js installation is needed. The EXE is currently unsigned, so Windows may show an “Unknown publisher” warning; use the release's `SHA256SUMS.txt` to verify your download.
 2. Start osu!lazer. If prompted to install tosu on first use, click **安装** (Install). The app downloads a pinned version and checks its SHA-256 hash. Use borderless or windowed mode so the external overlay can stay above the game.
 3. Play or preview a song. The app searches for timed lyrics automatically. If it cannot find a suitable version, use **搜索歌词** (Search lyrics), **导入 LRC** (Import LRC), or **编辑歌词** (Edit lyrics). The `−` and `＋` controls adjust timing by 0.5 seconds per click.
 
