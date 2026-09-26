@@ -1,0 +1,35 @@
+{
+  "name": "osu-lyrics-companion",
+  "version": "0.4.2",
+  "private": true,
+  "description": "A separate synced lyrics window for osu!",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "icons": "node scripts/make-icons.cjs",
+    "dist:win": "electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "local.osu-lyrics-companion",
+    "productName": "osu-lyrics",
+    "artifactName": "osu-lyrics-${version}-portable.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/tray.png",
+      "assets/app.ico",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/app.ico"
+    }
+  }
+}

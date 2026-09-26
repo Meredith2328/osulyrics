@@ -1,0 +1,156 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { parseLrc, serializeLrc, rankLyrics, chooseAutomaticMatch, activeLineAt } = require('../src/lyrics.cjs');
+const { LyricsService } = require('../src/lyrics-service.cjs');
+const { HttpError } = require('../src/lrclib-client.cjs');
+
+test('pairs Japanese and Chinese at the same timestamp and preserves repeated timestamps', () => {
+  const lines = parseLrc('[00:01.20][00:03.50]教えて\n[00:01.20]告诉我\n[00:04.00]その仕組みを');
+  assert.deepEqual(lines, [
+    { time: 1.2, original: '教えて', translation: '告诉我' },
+    { time: 3.5, original: '教えて', translation: '' },
+    { time: 4, original: 'その仕組みを', translation: '' },
+  ]);
+  assert.equal(activeLineAt(lines, 3.7), 1);
+  assert.equal(activeLineAt(lines, 0), -1);
+});
+
+test('supports offset metadata and a bilingual LRC round trip', () => {
+  const text = '[offset:500]\n[00:02.25]夢を見た\n[00:02.25]做了一个梦';
+  const lines = parseLrc(text);
+  assert.equal(lines[0].time, 2.75);
+  assert.deepEqual(parseLrc(serializeLrc(lines)), lines);
+});
+
+test('rejects a different length version during automatic matching', () => {
+  const song = { title: 'unravel', artist: 'TK from Ling tosite sigure', lastObjectMs: 90000 };
+  const candidates = [
+    { id: 1, trackName: 'unravel', artistName: 'TK from Ling tosite sigure', duration: 229, syncedLyrics: '[00:01.00]A' },
+    { id: 2, trackName: 'unravel', artistName: 'TK from Ling tosite sigure', duration: 95, syncedLyrics: '[00:01.00]B' },
+  ];
+  assert.equal(rankLyrics(song, candidates)[0].id, 2);
+  assert.equal(chooseAutomaticMatch(song, candidates).id, 2);
+});
+
+test('does not silently choose an ambiguous title-only match', () => {
+  const song = { title: 'Blue', artist: 'Some Artist', lastObjectMs: 0 };
+  const candidates = [{ id: 5, trackName: 'Blue', artistName: 'Other Artist', duration: 200, syncedLyrics: '[00:01.00]x' }];
+  assert.equal(chooseAutomaticMatch(song, candidates), null);
+});
+
+test('matches romanized metadata when osu displays Unicode metadata', () => {
+  const song = { title: '曲', romanizedTitle: 'Song', artist: '歌手', romanizedArtist: 'Artist', lastObjectMs: 0 };
+  const item = { id: 3, trackName: 'Song', artistName: 'Artist', duration: 200, syncedLyrics: '[00:01.00]x' };
+  assert.equal(chooseAutomaticMatch(song, [item]).id, 3);
+});
+
+test('uses audio length instead of the final hit object for lyric version selection', () => {
+  const song = { title: 'Song', artist: 'Artist', durationMs: 200000, lastObjectMs: 90000 };
+  const candidates = [
+    { id: 1, trackName: 'Song', artistName: 'Artist', duration: 90, syncedLyrics: '[00:01.00]x' },
+    { id: 2, trackName: 'Song', artistName: 'Artist', duration: 200, syncedLyrics: '[00:01.00]x' },
+  ];
+  assert.equal(chooseAutomaticMatch(song, candidates).id, 2);
+});
+
+test('prefers Japanese Love Letter lyrics over the same artist English edition', () => {
+  const song = { title: 'Love Letter', artist: 'YOASOBI', durationMs: 211000 };
+  const candidates = [
+    { id: 1, trackName: 'Love Letter', artistName: 'YOASOBI', albumName: 'E-SIDE 2', duration: 211, syncedLyrics: '[00:01.00]I feel delighted\n[00:03.00]I say true thoughts\n[00:05.00]Somehow I need you' },
+    { id: 2, trackName: 'Love Letter', artistName: 'YOASOBI', albumName: 'THE BOOK 2', duration: 211, syncedLyrics: '[00:01.00]ああ音楽へ\n[00:03.00]ずっと考えてたこと\n[00:05.00]どうか聞いてほしくって' },
+  ];
+  assert.equal(chooseAutomaticMatch(song, candidates)?.id, 2);
+  assert.equal(chooseAutomaticMatch({ ...song, difficulty: 'English Ver.' }, candidates)?.id, 1);
+});
+
+test('an old cached English LRCLIB match is reconsidered and upgraded', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-language-'));
+  const song = { key: 'love-letter', title: 'Love Letter', romanizedTitle: 'Love Letter', artist: 'YOASOBI', romanizedArtist: 'YOASOBI', durationMs: 211000 };
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => [{ id: 2, trackName: 'Love Letter', artistName: 'YOASOBI', albumName: 'THE BOOK 2', duration: 211, syncedLyrics: '[00:01.00]ああ音楽へ\n[00:01.00]致音乐\n[00:03.00]ずっと考えてたこと\n[00:05.00]どうか聞いてほしくって' }],
+    wait: async () => {},
+  });
+  service.song = song;
+  fs.writeFileSync(service.paths().lrc, '[00:01.00]I feel delighted\n[00:03.00]I say true thoughts\n[00:05.00]Somehow I need you\n');
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectedId: 1 }));
+  service.song = null;
+  service.translate = async () => {};
+  await service.setSong(song);
+  assert.equal(service.payload.lines[0].original, 'ああ音楽へ');
+  assert.equal(service.readMeta().selectionMode, 'auto');
+  fs.unwatchFile(service.watchedFile, service.watchHandler);
+});
+
+test('keeps existing lyrics when a manual online search fails', async () => {
+  const oldFetch = global.fetch;
+  global.fetch = async () => { throw new Error('offline'); };
+  try {
+    const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-test-')), () => {});
+    service.song = { key: 'test', title: 'Song', artist: 'Artist' };
+    service.payload = { status: 'ready', lines: [{ time: 1, original: '歌', translation: '歌' }], candidates: [], offsetMs: 0 };
+    await service.search('Song');
+    assert.equal(service.payload.status, 'ready');
+    assert.equal(service.payload.lines[0].original, '歌');
+  } finally { global.fetch = oldFetch; }
+});
+
+test('a late translation cannot overwrite a newer lyric selection', async () => {
+  const oldFetch = global.fetch;
+  const complete = [];
+  global.fetch = () => new Promise(resolve => complete.push(resolve));
+  try {
+    const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-race-')), () => {});
+    service.song = { key: 'test', title: 'Song', artist: 'Artist' };
+    service.candidates = [
+      { id: 1, syncedLyrics: '[00:01.00]第一版' },
+      { id: 2, syncedLyrics: '[00:01.00]第二版' },
+    ];
+    await service.select(1);
+    await service.select(2);
+    const response = word => ({ ok: true, json: async () => [[[word]]] });
+    complete[1](response('新翻译'));
+    await new Promise(resolve => setImmediate(resolve));
+    complete[0](response('旧翻译'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(service.payload.lines[0].original, '第二版');
+    assert.equal(service.payload.lines[0].translation, '新翻译');
+  } finally { global.fetch = oldFetch; }
+});
+
+test('falls back to metadata lookup when LRCLIB search stays at 503', async () => {
+  const routes = [];
+  const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-503-')), () => {}, {
+    requestLyrics: async url => {
+      routes.push(url.pathname);
+      if (url.pathname.endsWith('/search')) throw new HttpError(503, 1000);
+      return { id: 42, trackName: 'Song', artistName: 'Artist', duration: 200, syncedLyrics: '[00:01.00]歌う\n[00:01.00]歌唱' };
+    },
+    wait: async () => {},
+  });
+  service.song = { key: 'test', title: 'Song', romanizedTitle: 'Song', artist: 'Artist', romanizedArtist: 'Artist', durationMs: 200000 };
+  await service.search();
+  assert.deepEqual(routes, ['/api/search', '/api/search', '/api/get']);
+  assert.equal(service.payload.status, 'ready');
+  assert.equal(service.payload.lines[0].translation, '歌唱');
+});
+
+test('tries a title-only cached search after an artist search returns 503', async () => {
+  const routes = [];
+  const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-title-fallback-')), () => {}, {
+    requestLyrics: async url => {
+      routes.push(`${url.pathname}?${url.searchParams}`);
+      if (url.searchParams.has('artist_name')) throw new HttpError(503, 1000);
+      return [{ id: 9, trackName: 'Ashita no Kimi sae Ireba ii.', artistName: 'ChouCho', duration: 303, syncedLyrics: '[00:01.00]歌う\n[00:01.00]歌唱' }];
+    },
+    wait: async () => {},
+  });
+  service.song = { key: 'pack', title: 'Ashita no Kimi sae Ireba Ii', romanizedTitle: 'Ashita no Kimi sae Ireba Ii', artist: 'Choucho', romanizedArtist: 'Choucho', durationMs: 303000 };
+  await service.search();
+  assert.equal(routes.length, 2);
+  assert.ok(routes[1].includes('/api/search?track_name='));
+  assert.equal(service.payload.status, 'ready');
+  assert.equal(service.payload.lines[0].original, '歌う');
+});
