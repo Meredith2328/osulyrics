@@ -10,7 +10,7 @@ test('saves appearance, position and lock state for the next launch', () => {
   const file = path.join(folder, 'settings', 'windows.json');
   const config = {
     overlayBounds: { x: 120, y: 460, width: 700, height: 126 },
-    overlaySettings: { scale: 135, width: 820, opacity: 40, theme: 'contrast', showTranslation: false },
+    overlaySettings: { scale: 135, width: 820, opacity: 40, theme: 'contrast', showTranslation: false, originalColor: '#ffaacc', translationColor: '#00ccff', backgroundColor: '#1f1b28', fontStyle: 'serif', textEffect: 'outline', alignment: 'left' },
     panelSize: { width: 812, height: 487 },
     overlayLocked: true,
     overlayShown: false,
@@ -24,6 +24,7 @@ test('saves appearance, position and lock state for the next launch', () => {
   assert.equal(loadWindowConfig(file).overlayShown, false);
   assert.equal(loadWindowConfig(file).panelOpen, true);
   assert.deepEqual(loadWindowConfig(file).panelSize, { width: 812, height: 487 });
+  assert.equal(loadWindowConfig(file).overlaySettings.translationColor, '#00ccff');
 });
 
 test('a missing or corrupt config falls back safely', () => {

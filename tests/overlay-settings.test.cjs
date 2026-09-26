@@ -6,7 +6,31 @@ test('loads sensible defaults and rejects invalid saved values', () => {
   assert.deepEqual(normalizeOverlaySettings(), DEFAULT_OVERLAY_SETTINGS);
   assert.deepEqual(normalizeOverlaySettings({ scale: 500, width: 100, opacity: -4, theme: 'unknown', showTranslation: false }), {
     scale: 160, width: 480, opacity: 0, theme: 'plain', showTranslation: false,
+    originalColor: null, translationColor: null, backgroundColor: null,
+    fontStyle: 'osu', textEffect: 'auto', alignment: 'center',
   });
+});
+
+test('custom colors and typography normalize safely while old configs keep their look', () => {
+  const settings = normalizeOverlaySettings({
+    originalColor: '#FfAAcc', translationColor: '#00ccff', backgroundColor: '#1F1B28',
+    fontStyle: 'serif', textEffect: 'outline', alignment: 'left',
+  });
+  assert.deepEqual({
+    originalColor: settings.originalColor, translationColor: settings.translationColor,
+    backgroundColor: settings.backgroundColor, fontStyle: settings.fontStyle,
+    textEffect: settings.textEffect, alignment: settings.alignment,
+  }, {
+    originalColor: '#ffaacc', translationColor: '#00ccff', backgroundColor: '#1f1b28',
+    fontStyle: 'serif', textEffect: 'outline', alignment: 'left',
+  });
+  const invalid = normalizeOverlaySettings({ originalColor: 'red', translationColor: '#abcd', backgroundColor: '#zzzzzz', fontStyle: 'unknown', textEffect: 'glow', alignment: 'wide' });
+  assert.equal(invalid.originalColor, null);
+  assert.equal(invalid.translationColor, null);
+  assert.equal(invalid.backgroundColor, null);
+  assert.equal(invalid.fontStyle, 'osu');
+  assert.equal(invalid.textEffect, 'auto');
+  assert.equal(invalid.alignment, 'center');
 });
 
 test('scaling and translation visibility change the overlay window size', () => {

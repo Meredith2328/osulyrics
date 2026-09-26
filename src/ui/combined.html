@@ -34,11 +34,26 @@
 
       <section id="styleView" class="panel-view style-view" hidden>
         <div class="view-heading"><button id="backStyle" class="back-button">‹ 返回</button><h1>歌词外观</h1></div>
-        <div class="settings-list">
+        <nav class="appearance-tabs" aria-label="歌词外观分类">
+          <button id="basicTab" type="button" aria-selected="true">基础</button>
+          <button id="colorsTab" type="button" aria-selected="false">颜色</button>
+          <button id="typographyTab" type="button" aria-selected="false">排版</button>
+        </nav>
+        <div id="basicSettings" class="settings-list">
           <div class="setting-row"><label>歌词大小</label><div class="setting-control"><div class="stepper large"><button id="scaleBack" aria-label="缩小歌词">−</button><output id="scaleValue">100%</output><button id="scaleForward" aria-label="放大歌词">＋</button></div></div></div>
           <div class="setting-row"><label for="opacityRange">背景透明度</label><div class="setting-control range-control"><input id="opacityRange" type="range" min="5" max="100" step="1" title="100% 表示完全透明；纯文字样式没有背景"><output id="opacityValue">100%</output></div></div>
           <div class="setting-row"><label for="themeSelect">歌词样式</label><div class="setting-control"><select id="themeSelect"><option value="plain">纯文字</option><option value="glass">柔雾</option><option value="contrast">高对比</option></select></div></div>
           <div class="setting-row"><label for="translationToggle">中文翻译</label><div class="setting-control"><label class="switch"><input id="translationToggle" type="checkbox" checked><span class="switch-track"></span></label></div></div>
+        </div>
+        <div id="colorsSettings" class="settings-list" hidden>
+          <div class="setting-row"><label for="originalColor">原文颜色</label><div class="setting-control color-control"><input id="originalColor" type="color" value="#ffffff" aria-label="原文颜色"><output id="originalColorValue">默认</output><button id="originalColorDefault" type="button">默认</button></div></div>
+          <div class="setting-row"><label for="translationColor">译文颜色</label><div class="setting-control color-control"><input id="translationColor" type="color" value="#ffffff" aria-label="译文颜色"><output id="translationColorValue">默认</output><button id="translationColorDefault" type="button">默认</button></div></div>
+          <div class="setting-row"><label for="backgroundColor">背景颜色</label><div class="setting-control color-control"><input id="backgroundColor" type="color" value="#1f1b28" aria-label="背景颜色"><output id="backgroundColorValue">默认</output><button id="backgroundColorDefault" type="button">默认</button></div></div>
+        </div>
+        <div id="typographySettings" class="settings-list" hidden>
+          <div class="setting-row"><label for="fontStyleSelect">字体风格</label><div class="setting-control"><select id="fontStyleSelect"><option value="osu">osu! 圆润</option><option value="clean">清晰无衬线</option><option value="serif">经典衬线</option></select></div></div>
+          <div class="setting-row"><label for="textEffectSelect">文字效果</label><div class="setting-control"><select id="textEffectSelect"><option value="auto">跟随样式</option><option value="none">无</option><option value="outline">清晰描边</option><option value="shadow">柔和阴影</option></select></div></div>
+          <div class="setting-row"><label for="alignmentSelect">对齐方式</label><div class="setting-control"><select id="alignmentSelect"><option value="center">居中</option><option value="left">靠左</option><option value="right">靠右</option></select></div></div>
         </div>
         <div class="style-footer"><span>拖动歌词移动位置；拖动边缘等比缩放</span><button id="resetStyle">恢复默认</button></div>
       </section>

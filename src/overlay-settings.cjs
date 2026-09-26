@@ -4,11 +4,21 @@ const DEFAULT_OVERLAY_SETTINGS = Object.freeze({
   opacity: 0,
   theme: 'plain',
   showTranslation: true,
+  originalColor: null,
+  translationColor: null,
+  backgroundColor: null,
+  fontStyle: 'osu',
+  textEffect: 'auto',
+  alignment: 'center',
 });
 
 function clampNumber(value, fallback, min, max) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.round(number))) : fallback;
+}
+
+function normalizeColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
 }
 
 function normalizeOverlaySettings(input = {}) {
@@ -18,6 +28,12 @@ function normalizeOverlaySettings(input = {}) {
     opacity: clampNumber(input.opacity, DEFAULT_OVERLAY_SETTINGS.opacity, 0, 95),
     theme: ['glass', 'plain', 'contrast'].includes(input.theme) ? input.theme : DEFAULT_OVERLAY_SETTINGS.theme,
     showTranslation: input.showTranslation === false ? false : true,
+    originalColor: normalizeColor(input.originalColor),
+    translationColor: normalizeColor(input.translationColor),
+    backgroundColor: normalizeColor(input.backgroundColor),
+    fontStyle: ['osu', 'clean', 'serif'].includes(input.fontStyle) ? input.fontStyle : DEFAULT_OVERLAY_SETTINGS.fontStyle,
+    textEffect: ['auto', 'none', 'outline', 'shadow'].includes(input.textEffect) ? input.textEffect : DEFAULT_OVERLAY_SETTINGS.textEffect,
+    alignment: ['center', 'left', 'right'].includes(input.alignment) ? input.alignment : DEFAULT_OVERLAY_SETTINGS.alignment,
   };
 }
 

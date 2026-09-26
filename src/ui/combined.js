@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 let state = { connected: false, song: null, positionMs: 0, sampledAt: Date.now(), playing: false };
 let lyrics = { status: 'idle', lines: [], candidates: [], offsetMs: 0 };
 let tosu = { status: 'disconnected', installed: false };
-let settings = { scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true };
+let settings = { scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true, originalColor: null, translationColor: null, backgroundColor: null, fontStyle: 'osu', textEffect: 'auto', alignment: 'center' };
 let locked = false;
 let shown = true;
 let panelOpen = true;
@@ -15,6 +15,7 @@ let editing = false;
 let gesture = null;
 let suppressClick = false;
 let view = 'normal';
+let appearanceTab = 'basic';
 let candidatePage = 0;
 let showCandidatesAfterSearch = false;
 let measureQueued = false;
@@ -81,6 +82,12 @@ function renderCollapsedToggle() {
   if (!currentLayout) return;
   const dot = $('collapsedToggle');
   const animation = currentLayout.animation;
+  const reserveSpace = activeVisible && (animation ? animation.progress <= .5 : currentLayout.progress === 0);
+  if ($('lyricBox').classList.contains('with-toggle') !== reserveSpace) {
+    $('lyricBox').classList.toggle('with-toggle', reserveSpace);
+    queueLyricMeasure();
+    setTimeout(queueLyricMeasure, 190);
+  }
   const position = animation?.dot || { x: currentLayout.lyric.x + 16, y: currentLayout.lyric.y + 3 };
   dot.style.left = `${position.x}px`;
   dot.style.top = `${position.y}px`;
@@ -165,10 +172,32 @@ function renderControls() {
 }
 
 function renderStyle() {
-  document.documentElement.style.setProperty('--lyric-scale', String(settings.scale / 100));
-  document.documentElement.style.setProperty('--opacity', String(settings.opacity / 100));
-  $('lyricBox').classList.remove('theme-plain', 'theme-glass', 'theme-contrast');
-  $('lyricBox').classList.add(`theme-${settings.theme}`);
+  const root = document.documentElement.style;
+  root.setProperty('--lyric-scale', String(settings.scale / 100));
+  root.setProperty('--opacity', String(settings.opacity / 100));
+  const originalColor = settings.originalColor || '#ffffff';
+  const translationColor = settings.translationColor || (settings.theme === 'glass' ? '#ffddee' : '#ffffff');
+  const backgroundColor = settings.backgroundColor || (settings.theme === 'contrast' ? '#000000' : '#1f1b28');
+  root.setProperty('--original-color', originalColor);
+  root.setProperty('--translation-color', translationColor);
+  root.setProperty('--background-rgb', [1, 3, 5].map(index => parseInt(backgroundColor.slice(index, index + 2), 16)).join(', '));
+  const fonts = {
+    osu: '"Torus", "Nunito Sans", "Microsoft YaHei UI", "Segoe UI", sans-serif',
+    clean: '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
+    serif: 'Georgia, "Yu Mincho", SimSun, serif',
+  };
+  root.setProperty('--lyric-font', fonts[settings.fontStyle] || fonts.osu);
+  const effects = {
+    auto: settings.theme === 'plain' ? 'none' : '0 1px 2px #0009',
+    none: 'none',
+    outline: '1px 0 0 #000b, -1px 0 0 #000b, 0 1px 0 #000b, 0 -1px 0 #000b',
+    shadow: '0 2px 5px #000c',
+  };
+  root.setProperty('--lyric-shadow', effects[settings.textEffect] || effects.auto);
+  const box = $('lyricBox');
+  box.classList.remove('theme-plain', 'theme-glass', 'theme-contrast', 'align-left', 'align-right');
+  box.classList.add(`theme-${settings.theme}`);
+  if (settings.alignment !== 'center') box.classList.add(`align-${settings.alignment}`);
   $('translation').hidden = !settings.showTranslation || !$('translation').textContent;
   $('scaleValue').textContent = `${settings.scale}%`;
   const transparency = 100 - settings.opacity;
@@ -178,6 +207,15 @@ function renderStyle() {
   $('opacityRange').disabled = settings.theme === 'plain';
   $('themeSelect').value = settings.theme;
   $('translationToggle').checked = settings.showTranslation;
+  for (const [name, fallback] of [['originalColor', originalColor], ['translationColor', translationColor], ['backgroundColor', backgroundColor]]) {
+    $(name).value = settings[name] || fallback;
+    $(`${name}Value`).textContent = settings[name] ? settings[name].toUpperCase() : '默认';
+    $(`${name}Default`).disabled = !settings[name];
+  }
+  $('backgroundColor').disabled = settings.theme === 'plain';
+  $('fontStyleSelect').value = settings.fontStyle;
+  $('textEffectSelect').value = settings.textEffect;
+  $('alignmentSelect').value = settings.alignment;
   queueLyricMeasure();
 }
 
@@ -186,6 +224,14 @@ function setView(next) {
   $('normalView').hidden = next !== 'normal';
   $('styleView').hidden = next !== 'style';
   $('candidateView').hidden = next !== 'candidates';
+}
+
+function setAppearanceTab(next) {
+  appearanceTab = next;
+  for (const name of ['basic', 'colors', 'typography']) {
+    $(`${name}Tab`).setAttribute('aria-selected', String(name === next));
+    $(`${name}Settings`).hidden = name !== next;
+  }
 }
 
 function renderCandidates() {
@@ -383,7 +429,17 @@ $('lockButton').addEventListener('click', () => api.overlayLock(!locked));
 $('visibilityButton').addEventListener('click', () => api.overlayShow(false));
 $('styleButton').addEventListener('click', () => setView('style'));
 $('backStyle').addEventListener('click', () => setView('normal'));
-$('resetStyle').addEventListener('click', () => api.updateOverlaySettings({ scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true, resetLayout: true }));
+$('resetStyle').addEventListener('click', () => api.updateOverlaySettings({ scale: 100, width: 700, opacity: 0, theme: 'plain', showTranslation: true, originalColor: null, translationColor: null, backgroundColor: null, fontStyle: 'osu', textEffect: 'auto', alignment: 'center', resetLayout: true }));
+$('basicTab').addEventListener('click', () => setAppearanceTab('basic'));
+$('colorsTab').addEventListener('click', () => setAppearanceTab('colors'));
+$('typographyTab').addEventListener('click', () => setAppearanceTab('typography'));
+for (const name of ['originalColor', 'translationColor', 'backgroundColor']) {
+  $(name).addEventListener('input', event => api.updateOverlaySettings({ [name]: event.target.value }));
+  $(`${name}Default`).addEventListener('click', () => api.updateOverlaySettings({ [name]: null }));
+}
+$('fontStyleSelect').addEventListener('change', event => api.updateOverlaySettings({ fontStyle: event.target.value }));
+$('textEffectSelect').addEventListener('change', event => api.updateOverlaySettings({ textEffect: event.target.value }));
+$('alignmentSelect').addEventListener('change', event => api.updateOverlaySettings({ alignment: event.target.value }));
 $('scaleBack').addEventListener('click', () => api.updateOverlaySettings({ scale: settings.scale - 5 }));
 $('scaleForward').addEventListener('click', () => api.updateOverlaySettings({ scale: settings.scale + 5 }));
 $('opacityRange').addEventListener('input', event => api.updateOverlaySettings({ opacity: 100 - Number(event.target.value) }));
@@ -451,6 +507,7 @@ api.initial().then(initial => {
   panelOpen = initial.panel.open;
   panelSide = initial.panel.side;
   applyLayout(initial.layout);
+  setAppearanceTab(appearanceTab);
   renderStyle(); renderControls(); renderTrack(); renderStatus(); renderCandidates(); renderLyrics(); tick();
 });
 document.fonts.ready.then(queueLyricMeasure);
