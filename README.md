@@ -2,23 +2,55 @@
 
 [English](README.en.md) [Blog](https://meredith2328.github.io/posts/toy/osu-lyrics.html)
 
-给 osu!lazer 用的 Windows 悬浮歌词工具。它在游戏外运行，通过本机的 [tosu](https://github.com/tosuapp/tosu) 读取当前谱面与播放位置，不修改游戏，也不复制 osu! 源码。
+> Windows SmartScreen 可能会显示已阻止无法识别的程序运行，直接点“仍要运行”即可。
+
+给 osu!lazer 用的 Windows 悬浮歌词工具。
+
+它在游戏外运行，通过 [tosu](https://github.com/tosuapp/tosu) 读取当前谱面与播放位置，通过 [LRCLIB](https://lrclib.net/docs) 搜索歌词，通过 [Google Translate](https://docs.cloud.google.com/translate/docs/api-overview?hl=zh-cn) 翻译歌词为中文。
 
 ![osu!lyrics 在 osu!lazer 旁显示冰蓝色样的歌词与控制面板](docs/osu-lyrics-window.png)
 
 ## 使用
 
-1. 从 [Releases](https://github.com/Meredith2328/osulyrics/releases) 下载 `osu-lyrics-0.4.8-portable.exe`，双击运行。无需安装 Node.js。当前包未签名，Windows 可能显示「未知发布者」；可用 Release 附带的 SHA-256 文件核对下载内容。
-2. 打开 osu!lazer。首次使用若提示缺少 tosu，点击「安装」；程序会下载固定版本并校验 SHA-256。建议把游戏设为无边框或窗口模式，以便外部歌词窗口置顶。
-3. 播放或预览歌曲后，工具会自动查找同步歌词。没找到时可搜索其他版本、导入 LRC，或编辑当前歌词；「−／＋」每次校时 0.5 秒。
+1. 从 Releases 下载 osu-lyrics-x.x.x-portable.exe，双击运行（无需安装 Node.js）。当前包未签名，Windows 可能提示「未知发布者」，点继续运行即可。
 
-拖动歌词可移动位置，拖动边缘可缩放；点锁图标锁定位置。左上角粉色音符可收起或展开控制面板；面板本身也能拖动、从边缘缩放。「歌词外观」可调大小、透明度、颜色、排版和中文翻译，顶部有四种快捷色样。初次运行默认白粉色样，上图演示冰蓝色样。位置、样式、锁定状态与校时会保存在本机，重启后保留。
+2. 打开 osu!lazer。首次使用若提示缺少 tosu，点「安装」，程序会自动下载固定版本并校验 SHA-256。
 
-**Ctrl+Alt+Shift+L** 可隐藏或显示整个悬浮窗口；也可右键通知区域的音符图标操作。完全退出请使用该菜单。若快捷键被其他软件占用，仍可通过通知区域控制。
+3. 播放或预览歌曲，工具会自动查找同步歌词。没找到时可搜索其他版本、导入 LRC (歌词文件)，或手动编辑。
 
-本地配置与歌词放在 `%APPDATA%\osu-lyrics-companion`。**日常使用更推荐上面的便携 EXE**，无需安装 Node.js。`start.cmd` 和 `start.ps1` 仅供从源码运行：前者可双击，后者可执行 `powershell -ExecutionPolicy Bypass -File .\start.ps1`；两者会在首次运行时安装依赖。源码测试用 `npm test`。
+### 歌词与控制面板
 
-## 技术选型
+- 移动 / 缩放：拖动歌词或面板本体可移动位置，拖动边缘可缩放。
+
+- 锁定：点锁图标锁定当前位置。
+
+- 收起 / 展开：点**左上角粉色音符**可收起或展开控制面板。
+
+- 校时：「−／＋」每次调整 0.5 秒。
+
+- 歌词外观：可调大小、透明度、颜色、排版和中文翻译，顶部有四种快捷色样。初次运行默认白粉色样，上图演示冰蓝色样。
+
+- 保存：位置、样式、锁定状态与校时会保存在本机，重启后保留。
+
+### 显示与退出
+
+- 显示 / 隐藏：Ctrl+Alt+Shift+L 切换整个悬浮窗口，右键任务栏小图标也可切换。
+
+- 退出：右键任务栏小图标 → 退出。
+
+- 若快捷键被其他软件占用，仍可通过任务栏小图标控制。
+
+## 面向开发者
+
+本地配置与歌词放在 `%APPDATA%\osu-lyrics-companion`。**日常使用更推荐release的便携 EXE**，无需安装 Node.js。
+
+`start.cmd` 和 `start.ps1` 仅供从源码运行。
+
+前者可双击使用，后者可执行 `powershell -ExecutionPolicy Bypass -File .\start.ps1` 使用。
+
+二者会在首次运行时安装依赖。
+
+源码测试应使用 `npm test`。
 
 - [Electron](https://www.electronjs.org/) 提供透明置顶窗口、通知区域图标与全局快捷键。工具不会向 osu! 注入代码。EXE 的体积主要来自附带的 Chromium/Node.js 运行时；打包时只保留英、简中、繁中和日文语言资源。
 - [tosu](https://github.com/tosuapp/tosu) 作为独立本机程序，提供 osu!lazer 的曲目、谱面时间、暂停与改速信息；本工具从 `127.0.0.1:24050/json/v2` 读取，按游戏报告的时间轴同步歌词。
