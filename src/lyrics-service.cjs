@@ -106,12 +106,14 @@ class LyricsService {
     if (meta.source !== 'LRCLIB' || !this.automaticLyricsMayChange(meta)) return false;
     const knownDuration = Number(meta.audioDurationMs);
     const currentDuration = Number(song?.durationMs);
-    const durationMismatch = !Number.isFinite(knownDuration) || knownDuration <= 0 ||
-      (currentDuration > 0 && Math.abs(knownDuration - currentDuration) > 5000);
+    const durationMismatch = knownDuration > 0 && currentDuration > 0 &&
+      Math.abs(knownDuration - currentDuration) > 5000;
+    const lastLyricMs = (lines || []).reduce((latest, line) => Math.max(latest, Number(line.time) * 1000 || 0), 0);
+    const lyricsOutlastAudio = currentDuration > 0 && lastLyricMs > currentDuration + 15000;
     const oldEnglish = !meta.selectionMode &&
       lyricLanguage(serializeLrc(lines || [])) === 'en' &&
       !/\b(?:english|eng(?:lish)?\s*ver(?:sion)?|e-side)\b/i.test([song?.title, song?.difficulty].join(' '));
-    return durationMismatch || oldEnglish;
+    return durationMismatch || lyricsOutlastAudio || oldEnglish;
   }
 
   async setSong(song) {
@@ -286,6 +288,14 @@ class LyricsService {
   async select(id, generation = this.generation, selectionMode = 'manual') {
     const item = this.candidates.find(candidate => candidate.id === Number(id));
     if (!item || generation !== this.generation) return false;
+    const meta = this.readMeta();
+    if (selectionMode === 'auto' && meta.source === 'LRCLIB' &&
+        Number(meta.selectedId) === Number(item.id) && this.payload.lines?.length) {
+      this.writeMeta({ selectionMode: 'auto', audioDurationMs: Number(this.song.durationMs) || 0,
+        lyricsDurationMs: Math.round(Number(item.duration) * 1000) || 0 });
+      this.emit({ status: 'ready', source: 'LRCLIB', message: '' });
+      return true;
+    }
     this.searchRun++;
     const selectionToken = ++this.selectionToken;
     const lines = parseLrc(item.syncedLyrics);

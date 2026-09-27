@@ -148,6 +148,86 @@ test('a temporarily stale tosu length does not refetch an already correct lyric 
   }
 });
 
+test('a complete legacy lyric cache is reused without another search or translation', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-complete-cache-'));
+  let searches = 0, translations = 0;
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => { searches++; return []; },
+    wait: async () => {},
+  });
+  service.translate = async () => { translations++; };
+  const song = { key: 'complete', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+  service.song = song;
+  fs.writeFileSync(service.paths().lrc, '[00:01.00]あの歌\n[00:01.00]那首歌\n[00:20.00]次の歌\n[00:20.00]下一首歌\n');
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'auto', selectedId: 2, translationSource: '机器翻译' }));
+  service.song = null;
+  try {
+    await service.setSong(song);
+    assert.equal(searches, 0);
+    assert.equal(translations, 0);
+    assert.equal(service.payload.lines[0].translation, '那首歌');
+  } finally {
+    if (service.watchedFile) fs.unwatchFile(service.watchedFile, service.watchHandler);
+  }
+});
+
+test('rechecking the same LRCLIB version keeps its saved Chinese translation', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-same-version-'));
+  let searches = 0, translations = 0;
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => {
+      searches++;
+      return [{ id: 2, trackName: 'Song', artistName: 'Artist', duration: 100, syncedLyrics: '[00:01.00]あの歌\n[00:20.00]次の歌' }];
+    },
+    wait: async () => {},
+  });
+  service.translate = async () => { translations++; };
+  const song = { key: 'same-version', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+  service.song = song;
+  fs.writeFileSync(service.paths().lrc, '[00:01.00]あの歌\n[00:01.00]那首歌\n[00:20.00]次の歌\n[00:20.00]下一首歌\n');
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'auto', selectedId: 2, audioDurationMs: 150000, translationSource: '机器翻译' }));
+  service.song = null;
+  try {
+    await service.setSong(song);
+    assert.ok(searches > 0);
+    assert.equal(translations, 0);
+    assert.equal(service.payload.lines[0].translation, '那首歌');
+    assert.equal(service.readMeta().audioDurationMs, 100000);
+  } finally {
+    if (service.watchedFile) fs.unwatchFile(service.watchedFile, service.watchHandler);
+  }
+});
+
+test('a reviewed legacy English cache does not search again on the next visit', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-reviewed-english-'));
+  let searches = 0;
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => {
+      searches++;
+      return [{ id: 2, trackName: 'Song', artistName: 'Artist', duration: 100,
+        syncedLyrics: '[00:01.00]First line\n[00:20.00]Second line' }];
+    },
+    wait: async () => {},
+  });
+  const song = { key: 'english', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+  service.song = song;
+  fs.writeFileSync(service.paths().lrc, '[00:01.00]First line\n[00:01.00]第一句\n[00:20.00]Second line\n[00:20.00]第二句\n');
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectedId: 2, translationSource: '机器翻译' }));
+  service.song = null;
+  try {
+    await service.setSong(song);
+    const reviewedSearches = searches;
+    assert.ok(reviewedSearches > 0);
+    assert.equal(service.readMeta().selectionMode, 'auto');
+    await service.setSong(null);
+    await service.setSong(song);
+    assert.equal(searches, reviewedSearches);
+    assert.equal(service.payload.lines[0].translation, '第一句');
+  } finally {
+    if (service.watchedFile) fs.unwatchFile(service.watchedFile, service.watchHandler);
+  }
+});
+
 test('losing the current song clears lyrics even when the old metadata lacks a checksum', async () => {
   const service = new LyricsService(fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-clear-song-')), () => {});
   service.song = { title: 'Song', artist: 'Artist' };
@@ -158,7 +238,7 @@ test('losing the current song clears lyrics even when the old metadata lacks a c
   assert.deepEqual(service.payload.lines, []);
 });
 
-test('rechecks a legacy automatic cache without replacing a manually chosen version', async () => {
+test('rechecks an overlong legacy automatic cache without replacing a manually chosen version', async () => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-cache-legacy-'));
   let searches = 0;
   const service = new LyricsService(folder, () => {}, {
@@ -170,7 +250,7 @@ test('rechecks a legacy automatic cache without replacing a manually chosen vers
   });
   const song = { key: 'same-map', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
   service.song = song;
-  fs.writeFileSync(service.paths().lrc, '[00:01.00]古い歌\n[00:01.00]旧歌\n');
+  fs.writeFileSync(service.paths().lrc, '[02:10.00]古い歌\n[02:10.00]旧歌\n');
   fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'auto', selectedId: 1 }));
   service.song = null;
   try {
