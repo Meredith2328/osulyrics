@@ -1,6 +1,6 @@
 {
   "name": "osu-lyrics-companion",
-  "version": "0.4.11",
+  "version": "0.4.12",
   "private": true,
   "description": "A separate synced lyrics window for osu!",
   "main": "src/main.cjs",
