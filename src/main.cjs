@@ -373,6 +373,8 @@ ipcMain.handle('initial', () => ({
 ipcMain.handle('install-tosu', installTosu);
 ipcMain.handle('start-tosu', () => startTosu());
 ipcMain.handle('search-lyrics', (_event, query) => lyrics.search(String(query || '').slice(0, 120)));
+ipcMain.handle('refresh-lyrics', () => lyrics.refreshLyrics());
+ipcMain.handle('refresh-translation', () => lyrics.refreshTranslation());
 ipcMain.handle('choose-lyrics', (_event, id) => lyrics.select(id));
 ipcMain.handle('offset', (_event, delta) => lyrics.setOffset(Number(delta) || 0));
 ipcMain.handle('edit-lyrics', async () => {

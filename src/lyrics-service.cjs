@@ -63,7 +63,7 @@ class LyricsService {
     this.metadataChangedAt = 0;
     this.pendingInitialSearch = false;
     this.candidates = [];
-    this.payload = { status: 'idle', lines: [], candidates: [], offsetMs: 0 };
+    this.payload = { status: 'idle', lines: [], candidates: [], offsetMs: 0, selectionMode: '', machineTranslationIndexes: [] };
     fs.mkdirSync(folder, { recursive: true });
   }
 
@@ -155,13 +155,13 @@ class LyricsService {
     this.lastWritten = null;
     this.candidates = [];
     if (!song) {
-      this.emit({ status: 'idle', lines: [], candidates: [], offsetMs: 0, source: '', translationSource: '', message: '' });
+      this.emit({ status: 'idle', lines: [], candidates: [], offsetMs: 0, source: '', translationSource: '', message: '', selectionMode: '', machineTranslationIndexes: [] });
       return;
     }
     const generation = this.generation;
     const paths = this.paths();
     const meta = this.readMeta();
-    this.emit({ status: 'loading', lines: [], candidates: [], offsetMs: Number(meta.offsetMs) || 0, source: '', translationSource: '', message: '' });
+    this.emit({ status: 'loading', lines: [], candidates: [], offsetMs: Number(meta.offsetMs) || 0, source: '', translationSource: '', message: '', selectionMode: '', machineTranslationIndexes: [] });
     this.watchedFile = paths.lrc;
     this.watchHandler = () => {
       if (generation !== this.generation) return;
@@ -206,12 +206,53 @@ class LyricsService {
     if (edited) { this.searchRun++; this.selectionToken++; }
     this.lastWritten = contents;
     const meta = this.readMeta();
-    if (edited) this.writeMeta({ source: '本地编辑' });
-    this.emit({ status: 'ready', lines, source: edited ? '本地编辑' : meta.source || '本地 LRC', translationSource: lines.some(l => l.translation) ? (meta.translationSource || '歌词自带') : '' });
+    if (edited) this.writeMeta({ source: '本地编辑', selectionMode: 'manual',
+      translationSource: lines.some(l => l.translation) ? '本地编辑' : '', machineTranslationIndexes: [] });
+    this.emit({ status: 'ready', lines, source: edited ? '本地编辑' : meta.source || '本地 LRC',
+      selectionMode: edited ? 'manual' : meta.selectionMode || '',
+      machineTranslationIndexes: edited ? [] : Array.isArray(meta.machineTranslationIndexes) ? meta.machineTranslationIndexes : [],
+      translationSource: lines.some(l => l.translation) ? (edited ? '本地编辑' : meta.translationSource || '歌词自带') : '' });
     return true;
   }
 
-  async search(query = '', generation = this.generation) {
+  async refreshLyrics() {
+    if (!this.song) return { started: false, manualReview: false, candidates: [] };
+    let diskText;
+    let editedOnDisk = false;
+    try { diskText = fs.readFileSync(this.paths().lrc, 'utf8'); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (diskText !== undefined) {
+      editedOnDisk = diskText !== this.lastWritten;
+      if (editedOnDisk && !this.loadLocal(true)) this.writeMeta({ source: '本地编辑', selectionMode: 'manual' });
+    }
+    const meta = this.readMeta();
+    const preserveLocal = editedOnDisk || (!!this.payload.lines?.length &&
+      (meta.selectionMode === 'manual' || meta.source !== 'LRCLIB'));
+    const generation = this.generation;
+    await this.search('', generation, { autoSelect: !preserveLocal });
+    return generation === this.generation
+      ? { started: true, manualReview: preserveLocal, candidates: this.payload.candidates || [] }
+      : { started: false, manualReview: false, candidates: [] };
+  }
+
+  async refreshTranslation() {
+    if (!this.song || !this.payload.lines?.some(line => line.original)) return false;
+    const meta = this.readMeta();
+    const trackedIndexes = Array.isArray(meta.machineTranslationIndexes) ? meta.machineTranslationIndexes : null;
+    const machineIndexes = meta.translationSource === '机器翻译'
+      ? new Set(trackedIndexes || (meta.source === 'LRCLIB'
+        ? this.payload.lines.map((line, index) => line.translation ? index : -1).filter(index => index >= 0) : []))
+      : new Set();
+    const lines = this.payload.lines.map((line, index) => ({
+      ...line, translation: machineIndexes.has(index) ? '' : line.translation,
+    }));
+    if (!lines.some(line => line.original && !line.translation)) return false;
+    this.emit({ translationSource: '正在翻译…' });
+    await this.translate(lines, this.generation, ++this.selectionToken);
+    return true;
+  }
+
+  async search(query = '', generation = this.generation, options = {}) {
     if (!this.song) return;
     this.searchAbort?.abort();
     const abort = new AbortController();
@@ -219,6 +260,7 @@ class LyricsService {
     const song = this.song;
     const metadataRevision = this.metadataRevision;
     const searchRun = ++this.searchRun;
+    const autoSelect = options.autoSelect !== false && !query;
     const existingLines = this.payload.lines || [];
     this.emit({ status: 'searching', message: '正在搜索带时间戳的歌词…', candidates: [] });
     try {
@@ -240,7 +282,7 @@ class LyricsService {
           const found = await this.requestLyrics(url, { signal: abort.signal });
           for (const item of Array.isArray(found) ? found : []) all.set(item.id, item);
           if ((!mustTryUnicodeBase || triedUnicodeBase) &&
-              (all.size >= 8 || chooseAutomaticMatch(song, [...all.values()]))) break;
+              (all.size >= 8 || (autoSelect && chooseAutomaticMatch(song, [...all.values()])))) break;
           await this.wait(350, undefined, { signal: abort.signal });
         } catch (error) {
           lastError = error;
@@ -270,17 +312,18 @@ class LyricsService {
         } catch (error) { if (!(error instanceof HttpError && error.status === 404)) lastError = error; }
       }
       if (generation !== this.generation || searchRun !== this.searchRun) return;
-      if (metadataRevision !== this.metadataRevision) return this.search(query, generation);
+      if (metadataRevision !== this.metadataRevision) return this.search(query, generation, options);
       if (!all.size && lastError) throw lastError;
       this.candidates = rankLyrics(song, [...all.values()]);
       const summary = this.candidates.slice(0, 12).map(item => ({ id: item.id, title: item.trackName, artist: item.artistName, duration: item.duration, score: item.matchScore, language: item.language }));
       this.emit({ candidates: summary });
-      const best = query ? null : chooseAutomaticMatch(song, this.candidates);
+      const best = autoSelect ? chooseAutomaticMatch(song, this.candidates) : null;
       if (best) await this.select(best.id, generation, 'auto');
-      else this.emit({ status: existingLines.length ? 'ready' : 'choose', lines: existingLines, message: summary.length ? '请选择匹配的歌词版本' : '没有找到带时间戳的歌词。可以导入或编辑本地 LRC。' });
+      else this.emit({ status: existingLines.length ? 'ready' : 'choose', lines: existingLines,
+        message: summary.length ? '请选择匹配的歌词版本' : '没有找到带时间戳的歌词。可以导入或编辑本地 LRC。' });
     } catch (error) {
       if (generation === this.generation && searchRun === this.searchRun &&
-          metadataRevision !== this.metadataRevision) return this.search(query, generation);
+          metadataRevision !== this.metadataRevision) return this.search(query, generation, options);
       if (generation === this.generation && searchRun === this.searchRun) this.emit({ status: existingLines.length ? 'ready' : 'error', lines: existingLines, message: `歌词搜索失败：${error.message}` });
     }
   }
@@ -293,7 +336,7 @@ class LyricsService {
         Number(meta.selectedId) === Number(item.id) && this.payload.lines?.length) {
       this.writeMeta({ selectionMode: 'auto', audioDurationMs: Number(this.song.durationMs) || 0,
         lyricsDurationMs: Math.round(Number(item.duration) * 1000) || 0 });
-      this.emit({ status: 'ready', source: 'LRCLIB', message: '' });
+      this.emit({ status: 'ready', source: 'LRCLIB', selectionMode: 'auto', message: '' });
       return true;
     }
     this.searchRun++;
@@ -302,10 +345,11 @@ class LyricsService {
     if (!lines.length) return false;
     this.lastWritten = serializeLrc(lines);
     fs.writeFileSync(this.paths().lrc, this.lastWritten, 'utf8');
-    this.writeMeta({ source: 'LRCLIB', selectedId: item.id, selectionMode,
+    this.writeMeta({ source: 'LRCLIB', selectedId: item.id, selectionMode, machineTranslationIndexes: [],
       audioDurationMs: Number(this.song.durationMs) || 0, lyricsDurationMs: Math.round(Number(item.duration) * 1000) || 0,
       translationSource: lines.some(l => l.translation) ? '歌词自带' : '' });
-    this.emit({ status: 'ready', lines, source: 'LRCLIB', translationSource: lines.some(l => l.translation) ? '歌词自带' : '正在翻译…', message: '' });
+    this.emit({ status: 'ready', lines, source: 'LRCLIB', translationSource: lines.some(l => l.translation) ? '歌词自带' : '正在翻译…',
+      message: '', selectionMode, machineTranslationIndexes: [] });
     if (!lines.some(l => l.translation)) this.translate(lines, generation, selectionToken);
     return true;
   }
@@ -340,8 +384,10 @@ class LyricsService {
       if (current !== this.lastWritten) { this.loadLocal(true); return; }
       this.lastWritten = serializeLrc(translated);
       fs.writeFileSync(this.paths().lrc, this.lastWritten, 'utf8');
-      this.writeMeta({ translationSource: '机器翻译' });
-      this.emit({ lines: translated, translationSource: '机器翻译' });
+      const previousIndexes = this.readMeta().machineTranslationIndexes;
+      const machineTranslationIndexes = [...new Set([...(Array.isArray(previousIndexes) ? previousIndexes : []), ...indexes])].sort((a, b) => a - b);
+      this.writeMeta({ translationSource: '机器翻译', machineTranslationIndexes });
+      this.emit({ lines: translated, translationSource: '机器翻译', machineTranslationIndexes });
     } catch {
       if (generation === this.generation && selectionToken === this.selectionToken) this.emit({ translationSource: '翻译暂不可用' });
     }
@@ -362,8 +408,10 @@ class LyricsService {
     this.selectionToken++;
     this.lastWritten = serializeLrc(lines);
     fs.writeFileSync(this.paths().lrc, this.lastWritten, 'utf8');
-    this.writeMeta({ source: '导入的 LRC', translationSource: lines.some(l => l.translation) ? '歌词自带' : '' });
-    this.emit({ status: 'ready', lines, source: '导入的 LRC', translationSource: lines.some(l => l.translation) ? '歌词自带' : '', message: '' });
+    this.writeMeta({ source: '导入的 LRC', selectionMode: 'manual', machineTranslationIndexes: [],
+      translationSource: lines.some(l => l.translation) ? '歌词自带' : '' });
+    this.emit({ status: 'ready', lines, source: '导入的 LRC', selectionMode: 'manual', machineTranslationIndexes: [],
+      translationSource: lines.some(l => l.translation) ? '歌词自带' : '', message: '' });
     return true;
   }
 

@@ -143,6 +143,16 @@ function renderStatus() {
   $('translationLabel').textContent = detail;
   $('translationLabel').title = detail;
   $('normalView').classList.toggle('needs-lyrics', connected && !lyrics.lines?.length && (status === 'choose' || status === 'error'));
+  const hasSong = connected && !!state.song;
+  const lines = lyrics.lines || [];
+  const missingTranslation = lines.some(line => line.original && !line.translation);
+  const machineTranslation = ['机器翻译', '翻译暂不可用'].includes(lyrics.translationSource) &&
+    lines.some(line => line.translation) &&
+    (lyrics.source === 'LRCLIB' || !!lyrics.machineTranslationIndexes?.length);
+  $('refreshActions').hidden = !hasSong;
+  $('refreshLyricsButton').disabled = !hasSong || status === 'searching' || status === 'loading';
+  $('refreshTranslationButton').disabled = !hasSong || status === 'searching' || status === 'loading' ||
+    lyrics.translationSource === '正在翻译…' || (!missingTranslation && !machineTranslation);
   $('setupPanel').hidden = connected;
   if (!connected) {
     $('searchRow').hidden = true;
@@ -525,6 +535,16 @@ $('offsetBack').addEventListener('click', () => api.offset(-500));
 $('offsetForward').addEventListener('click', () => api.offset(500));
 $('importButton').addEventListener('click', () => api.importLyrics());
 $('editButton').addEventListener('click', () => api.editLyrics());
+$('refreshLyricsButton').addEventListener('click', async () => {
+  const result = await api.refreshLyrics();
+  if (result?.started && result.manualReview && result.candidates?.length) {
+    lyrics = { ...lyrics, candidates: result.candidates };
+    candidatePage = 0;
+    renderCandidates();
+    setView('candidates');
+  }
+});
+$('refreshTranslationButton').addEventListener('click', () => api.refreshTranslation());
 $('searchButton').addEventListener('click', () => {
   $('actionRow').hidden = true;
   $('searchRow').hidden = false;
@@ -566,6 +586,7 @@ api.onLyrics(next => {
   renderStatus();
   renderCandidates();
   if ((next.status === 'choose' || showCandidatesAfterSearch) && next.candidates?.length) { candidatePage = 0; setView('candidates'); showCandidatesAfterSearch = false; }
+  else if (['ready', 'choose', 'error'].includes(next.status) && !next.candidates?.length) showCandidatesAfterSearch = false;
 });
 api.onTosu(next => { tosu = { ...tosu, ...next }; renderStatus(); });
 api.onOverlaySettings(next => { locked = next.locked; settings = next.settings; lastReportedHeight = -1; renderControls(); renderStyle(); });

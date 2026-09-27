@@ -388,3 +388,149 @@ test('tries a title-only cached search after an artist search returns 503', asyn
   assert.equal(service.payload.status, 'ready');
   assert.equal(service.payload.lines[0].original, '歌う');
 });
+
+test('manual lyric pull searches again but keeps an edited LRC until a version is chosen', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-manual-pull-'));
+  let requests = 0;
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => {
+      requests++;
+      return [{ id: 2, trackName: 'Song', artistName: 'Artist', duration: 100,
+        syncedLyrics: '[00:01.00]オンライン\n[00:01.00]在线歌词' }];
+    },
+    wait: async () => {},
+  });
+  service.song = { key: 'song', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+  const local = '[00:01.00]手作り\n[00:01.00]手工歌词\n';
+  fs.writeFileSync(service.paths().lrc, local);
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: '本地编辑', selectionMode: 'manual' }));
+  service.payload = { status: 'ready', lines: parseLrc(local), source: '本地编辑' };
+  const result = await service.refreshLyrics();
+  assert.equal(result.manualReview, true);
+  assert.ok(requests > 0);
+  assert.equal(fs.readFileSync(service.paths().lrc, 'utf8'), local);
+  assert.equal(service.payload.lines[0].original, '手作り');
+  assert.equal(service.payload.candidates[0].id, 2);
+});
+
+test('manual lyric pull can replace an automatic LRCLIB match with a better version', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-refresh-auto-'));
+  let requests = 0;
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => {
+      requests++;
+      return [{ id: 2, trackName: 'Song', artistName: 'Artist', duration: 100,
+        syncedLyrics: '[00:01.00]新しい歌\n[00:01.00]新歌' }];
+    },
+    wait: async () => {},
+  });
+  service.song = { key: 'song', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+  const old = '[00:01.00]古い歌\n[00:01.00]旧歌\n';
+  fs.writeFileSync(service.paths().lrc, old);
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'auto', selectedId: 1, audioDurationMs: 100000 }));
+  service.lastWritten = old;
+  service.payload = { status: 'ready', lines: parseLrc(old), source: 'LRCLIB', selectionMode: 'auto' };
+  const result = await service.refreshLyrics();
+  assert.equal(result.manualReview, false);
+  assert.ok(requests > 0);
+  assert.equal(service.readMeta().selectedId, 2);
+  assert.equal(service.payload.lines[0].original, '新しい歌');
+});
+
+test('manual lyric pull preserves an external edit made before the file watcher notices it', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-fast-edit-'));
+  const service = new LyricsService(folder, () => {}, {
+    requestLyrics: async () => [{ id: 2, trackName: 'Song', artistName: 'Artist', duration: 100,
+      syncedLyrics: '[00:01.00]オンライン\n[00:01.00]在线歌词' }],
+    wait: async () => {},
+  });
+  service.song = { key: 'song', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+  const old = '[00:01.00]古い歌\n[00:01.00]旧歌\n';
+  const edited = '[00:01.00]手作り\n[00:01.00]手工歌词\n';
+  fs.writeFileSync(service.paths().lrc, edited);
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', selectionMode: 'auto', selectedId: 1 }));
+  service.lastWritten = old;
+  service.payload = { status: 'ready', lines: parseLrc(old), source: 'LRCLIB', selectionMode: 'auto' };
+  const result = await service.refreshLyrics();
+  assert.equal(result.manualReview, true);
+  assert.equal(service.readMeta().source, '本地编辑');
+  assert.equal(fs.readFileSync(service.paths().lrc, 'utf8'), edited);
+  assert.equal(service.payload.candidates[0].id, 2);
+});
+
+test('manual translation pull replaces existing machine translation', async () => {
+  const oldFetch = global.fetch;
+  global.fetch = async () => ({ ok: true, json: async () => [[['新译文']]] });
+  try {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-retranslate-'));
+    const service = new LyricsService(folder, () => {});
+    service.song = { key: 'song', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+    const old = '[00:01.00]あの歌\n[00:01.00]旧译文\n';
+    fs.writeFileSync(service.paths().lrc, old);
+    fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', translationSource: '机器翻译' }));
+    service.lastWritten = old;
+    service.payload = { status: 'ready', lines: parseLrc(old), source: 'LRCLIB', translationSource: '机器翻译' };
+    await service.refreshTranslation();
+    assert.equal(service.payload.lines[0].translation, '新译文');
+    assert.equal(parseLrc(fs.readFileSync(service.paths().lrc, 'utf8'))[0].translation, '新译文');
+  } finally { global.fetch = oldFetch; }
+});
+
+test('manual translation pull leaves completed hand-edited lyrics untouched', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-hand-translation-'));
+  const service = new LyricsService(folder, () => {});
+  service.song = { key: 'song', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+  const local = '[00:01.00]あの歌\n[00:01.00]手工译文\n';
+  fs.writeFileSync(service.paths().lrc, local);
+  fs.writeFileSync(service.paths().meta, JSON.stringify({ source: '本地编辑', translationSource: '机器翻译' }));
+  service.lastWritten = local;
+  service.payload = { status: 'ready', lines: parseLrc(local), source: '本地编辑', translationSource: '机器翻译' };
+  assert.equal(await service.refreshTranslation(), false);
+  assert.equal(fs.readFileSync(service.paths().lrc, 'utf8'), local);
+});
+
+test('retranslating mixed lyrics changes only the machine-generated lines', async () => {
+  const oldFetch = global.fetch;
+  let requests = 0;
+  global.fetch = async () => ({ ok: true, json: async () => [[[(++requests === 1 ? '第一次机译' : '第二次机译')]]] });
+  try {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-mixed-translation-'));
+    const service = new LyricsService(folder, () => {});
+    service.song = { key: 'mixed', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+    const lrc = '[00:01.00]あの歌\n[00:01.00]自带译文\n[00:02.00]次の歌\n';
+    fs.writeFileSync(service.paths().lrc, lrc);
+    fs.writeFileSync(service.paths().meta, JSON.stringify({ source: 'LRCLIB', translationSource: '歌词自带', machineTranslationIndexes: [] }));
+    service.lastWritten = lrc;
+    service.payload = { status: 'ready', lines: parseLrc(lrc), source: 'LRCLIB', translationSource: '歌词自带' };
+    await service.refreshTranslation();
+    assert.equal(service.payload.lines[0].translation, '自带译文');
+    assert.equal(service.payload.lines[1].translation, '第一次机译');
+    assert.deepEqual(service.readMeta().machineTranslationIndexes, [1]);
+    await service.refreshTranslation();
+    assert.equal(service.payload.lines[0].translation, '自带译文');
+    assert.equal(service.payload.lines[1].translation, '第二次机译');
+  } finally { global.fetch = oldFetch; }
+});
+
+test('machine-filled gaps in an edited LRC remain retryable without touching hand translation', async () => {
+  const oldFetch = global.fetch;
+  let requests = 0;
+  global.fetch = async () => ({ ok: true, json: async () => [[[(++requests === 1 ? '初次机译' : '重试机译')]]] });
+  try {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'osu-lyrics-edited-gap-'));
+    const service = new LyricsService(folder, () => {});
+    service.song = { key: 'edited', set: 42, title: 'Song', artist: 'Artist', durationMs: 100000 };
+    const lrc = '[00:01.00]あの歌\n[00:01.00]手工译文\n[00:02.00]次の歌\n';
+    fs.writeFileSync(service.paths().lrc, lrc);
+    fs.writeFileSync(service.paths().meta, JSON.stringify({ source: '本地编辑', translationSource: '本地编辑', machineTranslationIndexes: [] }));
+    service.lastWritten = lrc;
+    service.payload = { status: 'ready', lines: parseLrc(lrc), source: '本地编辑', translationSource: '本地编辑' };
+    await service.refreshTranslation();
+    assert.equal(service.payload.lines[0].translation, '手工译文');
+    assert.equal(service.payload.lines[1].translation, '初次机译');
+    assert.deepEqual(service.readMeta().machineTranslationIndexes, [1]);
+    await service.refreshTranslation();
+    assert.equal(service.payload.lines[0].translation, '手工译文');
+    assert.equal(service.payload.lines[1].translation, '重试机译');
+  } finally { global.fetch = oldFetch; }
+});

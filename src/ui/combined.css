@@ -148,9 +148,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .lyric-state[data-status="ready"] .status-dot { background: #75d4ad; }
 .lyric-state[data-status="searching"] .status-dot, .lyric-state[data-status="loading"] .status-dot { background: #ffcc5b; }
 .lyric-state[data-status="choose"] .status-dot, .lyric-state[data-status="error"] .status-dot { background: #ff80ab; }
-.status-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.status-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .status-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 18px; font-weight: 650; }
 .status-detail { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #bdb2c7; font-size: 12.5px; line-height: 16px; }
+.refresh-actions { flex: none; display: flex; align-items: center; gap: 3px; }
+.refresh-actions button { height: 30px; padding: 0 8px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #c5b9d1; font-size: 12.5px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer; }
+.refresh-actions button:hover:not(:disabled) { border-color: #ffffff30; background: #ffffff14; color: #f5ecfa; }
+.refresh-actions button:disabled { opacity: .43; cursor: default; }
 .action-slot { height: 40px; margin-top: 18px; }
 .action-row, .search-row, .setup-panel { height: 40px; display: flex; align-items: center; gap: 9px; }
 .action-button, .quiet-button, .track-style-button, .header-lock, .header-visibility, .back-button, .style-footer button, .page-row button {

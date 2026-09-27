@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('osuLyrics', {
   installTosu: () => ipcRenderer.invoke('install-tosu'),
   startTosu: () => ipcRenderer.invoke('start-tosu'),
   searchLyrics: query => ipcRenderer.invoke('search-lyrics', query),
+  refreshLyrics: () => ipcRenderer.invoke('refresh-lyrics'),
+  refreshTranslation: () => ipcRenderer.invoke('refresh-translation'),
   chooseLyrics: id => ipcRenderer.invoke('choose-lyrics', id),
   offset: delta => ipcRenderer.invoke('offset', delta),
   editLyrics: () => ipcRenderer.invoke('edit-lyrics'),

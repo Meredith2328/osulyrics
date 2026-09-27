@@ -23,7 +23,7 @@
       <section id="normalView" class="panel-view normal-view">
         <div class="track-block"><div class="track-info"><h1 id="trackTitle">等待歌曲</h1><span id="trackArtist">播放后自动识别</span></div><button id="styleButton" class="track-style-button">歌词外观<span aria-hidden="true">›</span></button></div>
         <div class="timeline"><span id="elapsed">0:00</span><div class="progress-track"><div id="progress" class="progress-fill"></div></div><span id="duration">--:--</span></div>
-        <div id="lyricState" class="lyric-state" data-status="idle"><span class="status-dot"></span><div class="status-copy"><strong id="sourceLabel">等待歌曲</strong><span id="translationLabel" class="status-detail"></span></div></div>
+        <div id="lyricState" class="lyric-state" data-status="idle"><span class="status-dot"></span><div class="status-copy"><strong id="sourceLabel">等待歌曲</strong><span id="translationLabel" class="status-detail"></span></div><div id="refreshActions" class="refresh-actions" hidden><button id="refreshLyricsButton" type="button" title="重新查找当前歌曲的同步歌词">拉取歌词</button><button id="refreshTranslationButton" type="button" title="重试缺失或机器译文，保留手工与歌词自带译文">拉取翻译</button></div></div>
         <div class="action-slot">
           <div id="actionRow" class="action-row"><button id="searchButton" class="action-button action-search">搜索歌词</button><button id="importButton" class="action-button">导入 LRC</button><button id="editButton" class="quiet-button">编辑歌词</button></div>
           <div id="searchRow" class="search-row" hidden><input id="searchInput" type="search" placeholder="输入曲名或歌手"><button id="submitSearch" class="action-button primary">搜索</button><button id="cancelSearch" class="quiet-button">取消</button></div>
