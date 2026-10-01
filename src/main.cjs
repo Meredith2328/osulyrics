@@ -7,6 +7,7 @@ const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
 const { LyricsService } = require('./lyrics-service.cjs');
 const { normalizeTosu } = require('./osu.cjs');
+const { ClockSync } = require('./clock-sync.cjs');
 const { DEFAULT_OVERLAY_SETTINGS, LEGACY_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, resizeFromHandle } = require('./overlay-settings.cjs');
 const { normalizePanelSize, scaledPanelSize, panelResizedLyricBounds, choosePanelSide, fitLyricForPanel, combinedLayout, animatedLayout, iconOnlyLayout } = require('./combined-layout.cjs');
 const { loadWindowConfig, persistWindowConfig } = require('./window-config.cjs');
@@ -30,6 +31,7 @@ let launchAttempted = false;
 let startedAt = 0;
 let stopping = false;
 let pollTimer;
+const clockSync = new ClockSync();
 let saveTimer;
 let animationTimer;
 let exitRequested = false;
@@ -248,7 +250,9 @@ async function pollTosu() {
       }
       throw new Error(`HTTP ${response.status}`);
     }
-    current = normalizeTosu(await response.json());
+    const receivedAt = Date.now();
+    current = normalizeTosu(await response.json(), receivedAt);
+    current.positionMs = clockSync.update({ ...current, key: `${current.song?.key || ''}|${current.state}` });
     if (current.song?.id === null && current.song.title === 'circles!' && current.song.artist === 'nekodex') current.song = null;
     if (tosuStatus !== 'connected') {
       tosuStatus = 'connected';
