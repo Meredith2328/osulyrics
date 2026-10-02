@@ -21,10 +21,15 @@ function normalizeTosu(data, sampledAt = Date.now()) {
   const title = compiled?.title || setTitle;
   const artist = compiled?.artist || setArtist;
   const state = data?.state?.name || '';
+  const usablePath = value => typeof value === 'string' && value.trim() && !/^\.\.?$/.test(value.trim()) ? value : '';
+  const beatmapFolder = usablePath(data?.folders?.beatmap) || usablePath(data?.directPath?.beatmapFolder);
+  const audioFile = usablePath(data?.files?.audio) || usablePath(data?.directPath?.beatmapAudio);
   const song = title && artist ? {
-    key: map.checksum || `${map.set || map.id || ''}:${artist}:${title}:${map.version || ''}`,
+    key: map.checksum || JSON.stringify([map.set || map.id || '', artist, title, map.version || '', beatmapFolder, audioFile]),
     id: map.id || null,
     set: map.set || null,
+    beatmapFolder,
+    audioFile,
     title,
     artist,
     romanizedTitle: compiled?.title || map.title || title,
