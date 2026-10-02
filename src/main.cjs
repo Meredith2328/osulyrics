@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const { spawn, execFile } = require('node:child_process');
 const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
-const { LyricsService } = require('./lyrics-service.cjs');
+const { LyricsService, fileId } = require('./lyrics-service.cjs');
 const { normalizeTosu } = require('./osu.cjs');
 const { ClockSync } = require('./clock-sync.cjs');
 const { DEFAULT_OVERLAY_SETTINGS, LEGACY_OVERLAY_SETTINGS, normalizeOverlaySettings, overlayDimensions, requiredLyricHeight, draggedBounds, styleBoundsAtAnchor, resizeRatioFromHandle, resizeFromHandle } = require('./overlay-settings.cjs');
@@ -252,7 +252,7 @@ async function pollTosu() {
     }
     const receivedAt = Date.now();
     current = normalizeTosu(await response.json(), receivedAt);
-    current.positionMs = clockSync.update({ ...current, key: `${current.song?.key || ''}|${current.state}` });
+    current.positionMs = clockSync.update({ ...current, key: `${current.song ? fileId(current.song) : ''}|${current.song?.key || ''}|${current.state}` });
     if (current.song?.id === null && current.song.title === 'circles!' && current.song.artist === 'nekodex') current.song = null;
     if (tosuStatus !== 'connected') {
       tosuStatus = 'connected';
