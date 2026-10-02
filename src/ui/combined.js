@@ -22,6 +22,15 @@ let showCandidatesAfterSearch = false;
 let measureQueued = false;
 let lastReportedHeight = -1;
 
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+reducedMotion.addEventListener('change', () => { if (currentLayout) applyLayout(currentLayout); });
+function renderPresence() {
+  document.body.hidden = !shown;
+  document.body.inert = !shown;
+  if (!shown) setEditing(false);
+  if (currentLayout) applyLayout(currentLayout);
+}
+
 function measureLyricHeight() {
   measureQueued = false;
   const box = $('lyricBox');
@@ -82,19 +91,14 @@ function renderLyrics() {
 function renderCollapsedToggle() {
   if (!currentLayout) return;
   const dot = $('collapsedToggle');
-  const animation = currentLayout.animation;
-  const reserveSpace = activeVisible && (animation ? animation.progress <= .5 : currentLayout.progress === 0);
-  if ($('lyricBox').classList.contains('with-toggle') !== reserveSpace) {
-    $('lyricBox').classList.toggle('with-toggle', reserveSpace);
-    queueLyricMeasure();
-    setTimeout(queueLyricMeasure, 190);
-  }
-  const position = animation?.dot || { x: currentLayout.lyric.x + 16, y: currentLayout.lyric.y + 3 };
-  dot.style.left = `${position.x}px`;
-  dot.style.top = `${position.y}px`;
-  dot.style.opacity = String(animation ? 1 - animation.panelScale : 1);
-  dot.style.pointerEvents = animation?.panelScale > .95 ? 'none' : 'auto';
-  dot.hidden = !shown || (!animation && currentLayout.progress > 0);
+  // Reserve the same text column in every presence state; the orb never travels.
+  const reserveSpace = activeVisible;
+  $('lyricBox').classList.toggle('with-toggle', reserveSpace);
+  dot.style.left = `${currentLayout.lyric.x + 12}px`;
+  dot.style.top = `${currentLayout.lyric.y}px`;
+  dot.style.opacity = '1';
+  dot.style.pointerEvents = shown ? 'auto' : 'none';
+  dot.hidden = !shown;
 }
 
 function setEditing(value) {
@@ -138,6 +142,9 @@ function renderStatus() {
       detail = lyrics.message || '可重试搜索或导入本地 LRC';
     }
   }
+  const recovery = connected && state.song && !lyrics.lines?.length
+    ? status === 'error' ? 'retry' : status === 'choose' && !lyrics.candidates?.length ? 'search' : '' : '';
+  $('normalView').dataset.recovery = recovery;
   $('lyricState').dataset.status = status;
   $('sourceLabel').textContent = label;
   $('translationLabel').textContent = detail;
@@ -175,9 +182,12 @@ function renderControls() {
   $('panelSurface').classList.toggle('locked', locked);
   for (const id of ['brandToggle', 'collapsedToggle']) $(id).classList.toggle('draggable', !locked);
   $('brandToggle').title = locked ? '收起设置' : '拖动移动位置；点击收起设置';
-  $('collapsedToggle').title = locked ? '展开osu!lyrics' : '拖动移动位置；点击展开osu!lyrics';
+  const toggleLabel = panelOpen ? '收起 osu!lyrics' : '展开 osu!lyrics';
+  $('collapsedToggle').title = locked ? toggleLabel : `拖动移动位置；点击${toggleLabel}`;
+  $('collapsedToggle').setAttribute('aria-label', toggleLabel);
+  $('collapsedToggle').setAttribute('aria-expanded', String(panelOpen));
   $('styleButton').disabled = locked;
-  $('visibilityButton').textContent = shown ? '完全隐藏osu!lyrics' : '显示osu!lyrics';
+  $('visibilityButton').textContent = shown ? '隐藏' : '显示';
   if (locked && view === 'style') setView('normal');
   const box = $('lyricBox');
   box.classList.toggle('locked', locked);
@@ -219,6 +229,8 @@ function renderStyle() {
   $('opacityRange').style.setProperty('--fill', `${(transparency - 5) / 95 * 100}%`);
   $('opacityValue').textContent = `${transparency}%`;
   $('opacityRange').disabled = settings.theme === 'plain';
+  $('opacityHint').hidden = settings.theme !== 'plain';
+  $('translationState').textContent = settings.showTranslation ? '开启' : '关闭';
   $('themeSelect').value = settings.theme;
   $('translationToggle').checked = settings.showTranslation;
   for (const [name, fallback] of [['originalColor', originalColor], ['translationColor', translationColor], ['backgroundColor', backgroundColor]]) {
@@ -236,6 +248,8 @@ function renderStyle() {
 
 function setView(next) {
   view = next;
+  $('styleButton').hidden = next !== 'normal';
+  $('backButton').hidden = next === 'normal';
   $('normalView').hidden = next !== 'normal';
   $('styleView').hidden = next !== 'style';
   $('candidateView').hidden = next !== 'candidates';
@@ -259,6 +273,12 @@ function buildPresetSwatches() {
     button.setAttribute('aria-pressed', 'false');
     button.setAttribute('aria-label', `${preset.name}：${preset.hint}`);
     button.title = `${preset.name} · ${preset.hint}`;
+    const sample = document.createElement('span');
+    sample.className = 'preset-sample';
+    sample.setAttribute('aria-hidden', 'true');
+    const name = document.createElement('span');
+    name.textContent = preset.id === 'clear' ? '清爽' : preset.name;
+    button.append(sample, name);
     button.classList.toggle('plain', !!preset.preview.plain);
     button.style.setProperty('--preset-original', preset.preview.original);
     button.style.setProperty('--preset-translation', preset.preview.translation);
@@ -305,16 +325,20 @@ function applyLayout(layout) {
   panelSide = layout.side;
   const clip = $('panelClip');
   const panel = layout.panel;
-  clip.hidden = !layout.animation && panel.visibleHeight < 1;
+  const opacity = reducedMotion.matches ? (panelOpen && (layout.animation || layout.progress > 0) ? 1 : 0) : (layout.animation?.opacity ?? layout.progress);
+  clip.hidden = opacity <= 0;
+  clip.style.opacity = String(opacity);
+  clip.inert = !shown || !panelOpen || opacity <= 0;
+  clip.style.pointerEvents = clip.inert ? 'none' : 'auto';
   clip.style.left = `${panel.x}px`;
   clip.style.top = `${panel.y}px`;
   clip.style.width = `${panel.width}px`;
-  clip.style.height = `${layout.animation ? panel.height : panel.visibleHeight}px`;
-  $('panelSurface').style.top = layout.animation ? '0px' : layout.side === 'above' ? `${panel.visibleHeight - panel.height}px` : '0px';
+  clip.style.height = `${panel.height}px`;
+  $('panelSurface').style.top = '0px';
   $('panelSurface').style.width = `${panel.width / panel.contentScale}px`;
   $('panelSurface').style.height = `${panel.height / panel.contentScale}px`;
   $('panelSurface').classList.toggle('compact', panel.height < 410);
-  document.documentElement.style.setProperty('--panel-scale', String(panel.contentScale * (layout.animation?.panelScale ?? 1)));
+  document.documentElement.style.setProperty('--panel-scale', String(panel.contentScale));
   const box = $('lyricBox');
   const widthChanged = box.style.width !== `${layout.lyric.width}px`;
   box.style.left = `${layout.lyric.x}px`;
@@ -506,15 +530,17 @@ function bindIconDrag(id, opensPanel) {
   button.addEventListener('lostpointercapture', event => { if (pointerId === event.pointerId) finish(); });
   button.addEventListener('click', () => {
     if (suppressClick) { suppressClick = false; return; }
-    api.panelToggle(opensPanel);
+    api.panelToggle(opensPanel === null ? !panelOpen : opensPanel);
   });
 }
 bindIconDrag('brandToggle', false);
-bindIconDrag('collapsedToggle', true);
+bindIconDrag('collapsedToggle', null);
 $('lockButton').addEventListener('click', () => api.overlayLock(!locked));
-$('visibilityButton').addEventListener('click', () => api.overlayShow(false));
+$('visibilityButton').addEventListener('click', () => {
+  shown = false; renderPresence(); api.overlayShow(false);
+});
 $('styleButton').addEventListener('click', () => setView('style'));
-$('backStyle').addEventListener('click', () => setView('normal'));
+$('backButton').addEventListener('click', () => setView('normal'));
 $('resetStyle').addEventListener('click', () => api.updateOverlaySettings({ scale: 100, width: 700, showTranslation: true, ...presetsApi.presetPatch('sakura'), resetLayout: true }));
 $('basicTab').addEventListener('click', () => setAppearanceTab('basic'));
 $('colorsTab').addEventListener('click', () => setAppearanceTab('colors'));
@@ -555,7 +581,6 @@ $('cancelSearch').addEventListener('click', closeSearch);
 function submitSearch() { showCandidatesAfterSearch = true; closeSearch(); api.searchLyrics($('searchInput').value.trim()); }
 $('submitSearch').addEventListener('click', submitSearch);
 $('searchInput').addEventListener('keydown', event => { if (event.key === 'Enter') submitSearch(); });
-$('backCandidates').addEventListener('click', () => setView('normal'));
 $('previousPage').addEventListener('click', () => { candidatePage--; renderCandidates(); });
 $('nextPage').addEventListener('click', () => { candidatePage++; renderCandidates(); });
 $('setupButton').addEventListener('click', async () => {
@@ -591,8 +616,8 @@ api.onLyrics(next => {
 });
 api.onTosu(next => { tosu = { ...tosu, ...next }; renderStatus(); });
 api.onOverlaySettings(next => { locked = next.locked; settings = next.settings; lastReportedHeight = -1; renderControls(); renderStyle(); });
-api.onOverlayPresence(next => { shown = next.shown; if (!shown) setEditing(false); renderControls(); renderCollapsedToggle(); });
-api.onPanelState(next => { panelOpen = next.open; panelSide = next.side; if (!panelOpen) { setView('normal'); setEditing(false); } renderCollapsedToggle(); });
+api.onOverlayPresence(next => { shown = next.shown; renderPresence(); renderControls(); renderCollapsedToggle(); });
+api.onPanelState(next => { panelOpen = next.open; panelSide = next.side; if (!panelOpen) { setView('normal'); setEditing(false); } renderControls(); renderCollapsedToggle(); if (currentLayout) applyLayout(currentLayout); });
 api.onLayout(applyLayout);
 
 buildPresetSwatches();
@@ -607,6 +632,6 @@ api.initial().then(initial => {
   panelSide = initial.panel.side;
   applyLayout(initial.layout);
   setAppearanceTab(appearanceTab);
-  renderStyle(); renderControls(); renderTrack(); renderStatus(); renderCandidates(); renderLyrics(); tick();
+  renderPresence(); renderStyle(); renderControls(); renderTrack(); renderStatus(); renderCandidates(); renderLyrics(); tick();
 });
 document.fonts.ready.then(queueLyricMeasure);

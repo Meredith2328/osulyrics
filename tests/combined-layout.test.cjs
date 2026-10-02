@@ -107,45 +107,30 @@ test('top and bottom panel borders keep the opposite panel edge fixed', () => {
   assert.equal(fromBelowBottom.y + fromBelowBottom.height + 8, belowTop);
 });
 
-test('collapse first shrinks at the panel icon, then moves the dot vertically to lyrics', () => {
-  const lyric = { x: 400, y: 650, width: 700, height: 80 };
-  const frames = [1, .75, .5, .25, 0].map(progress => animatedLayout(lyric, settings, 'above', progress, screen));
-  assert.deepEqual(frames.map(frame => frame.window), [frames[0].window, frames[0].window, frames[0].window, frames[0].window, frames[0].window]);
-  assert.deepEqual(frames.map(frame => frame.window.y + frame.lyric.y), [650, 650, 650, 650, 650]);
-  assert.equal(frames[0].animation.panelScale, 1);
-  assert.equal(frames[2].animation.panelScale, 0);
-  assert.equal(frames[4].animation.panelScale, 0);
-  assert.equal(frames[0].animation.dot.y, frames[1].animation.dot.y);
-  assert.equal(frames[1].animation.dot.y, frames[2].animation.dot.y);
-  assert.ok(frames[3].animation.dot.y > frames[2].animation.dot.y);
-  assert.equal(frames[4].animation.dot.y, frames[4].lyric.y + 3);
-  assert.equal(frames[0].animation.dot.x, frames[4].animation.dot.x);
-});
-
-test('when the panel opens below lyrics, the dot travels upward instead', () => {
-  const lyric = { x: 400, y: 40, width: 700, height: 80 };
-  const atPanel = animatedLayout(lyric, settings, 'below', .5, screen);
-  const atLyric = animatedLayout(lyric, settings, 'below', 0, screen);
-  assert.ok(atPanel.animation.dot.y > atLyric.animation.dot.y);
-  assert.equal(atLyric.animation.dot.y, atLyric.lyric.y + 3);
-});
-
-test('narrow lyrics still give the icon a vertical-only path when panel is wider', () => {
-  const lyric = { x: 100, y: 650, width: 336, height: 56 };
-  const small = { ...settings, scale: 70, width: 480 };
-  const atPanel = animatedLayout(lyric, small, 'above', .5, screen);
-  const atLyric = animatedLayout(lyric, small, 'above', 0, screen);
-  assert.equal(atPanel.animation.dot.x, atLyric.animation.dot.x);
-  assert.equal(atPanel.window.x + atPanel.panel.x, lyric.x);
+for (const side of ['above', 'below']) test(`v2 ${side} opacity frames retain panel, lyric and orb geometry`, () => {
+  const lyric = { x: 400, y: side === 'above' ? 650 : 40, width: 700, height: 80 };
+  const frames = [0, 83/167, 1, .251, 0].map(progress => animatedLayout(lyric, settings, side, progress, screen));
+  for (const frame of frames) {
+    assert.deepEqual(frame.window, frames[0].window);
+    assert.deepEqual(frame.panel, frames[0].panel);
+    assert.deepEqual(frame.lyric, frames[0].lyric);
+    assert.deepEqual(frame.animation.dot, frames[0].animation.dot);
+    assert.equal(frame.window.x + frame.animation.dot.x + 22, lyric.x + 34);
+    assert.equal(frame.window.y + frame.animation.dot.y + 22, lyric.y + 22);
+    assert.equal(frame.window.y + frame.lyric.y, lyric.y);
+    assert.equal(frame.animation.panelScale, undefined);
+  }
+  assert.equal(frames[1].animation.opacity, 83/167);
+  assert.equal(frames[2].animation.opacity, 1);
 });
 
 test('with no lyric and a collapsed panel, only the note icon occupies the window', () => {
   const lyric = { x: 400, y: 650, width: 700, height: 80 };
   const normal = combinedLayout(lyric, settings, 'above', 0, screen);
   const compact = iconOnlyLayout(normal, screen);
-  assert.deepEqual(compact.window, { x: 405, y: 642, width: 56, height: 56 });
-  assert.equal(compact.window.x + compact.lyric.x + 16, lyric.x + 16);
-  assert.equal(compact.window.y + compact.lyric.y + 3, lyric.y + 3);
+  assert.deepEqual(compact.window, { x: 406, y: 644, width: 56, height: 56 });
+  assert.equal(compact.window.x + compact.lyric.x + 12, lyric.x + 12);
+  assert.equal(compact.window.y + compact.lyric.y , lyric.y);
   assert.equal(compact.iconOnly, true);
 });
 

@@ -99,14 +99,14 @@ function combinedLayout(lyric, settings, side, progress, area = null, size = nul
 
 function iconOnlyLayout(layout, area) {
   const width = 56, height = 56;
-  const dotX = layout.window.x + layout.lyric.x + 16;
-  const dotY = layout.window.y + layout.lyric.y + 3;
-  const x = Math.round(Math.max(area.x, Math.min(dotX - 11, area.x + area.width - width)));
-  const y = Math.round(Math.max(area.y, Math.min(dotY - 11, area.y + area.height - height)));
+  const dotX = layout.window.x + layout.lyric.x + 12;
+  const dotY = layout.window.y + layout.lyric.y;
+  const x = Math.round(Math.max(area.x, Math.min(dotX - 6, area.x + area.width - width)));
+  const y = Math.round(Math.max(area.y, Math.min(dotY - 6, area.y + area.height - height)));
   return {
     ...layout,
     window: { x, y, width, height },
-    lyric: { ...layout.lyric, x: -5, y: 8 },
+    lyric: { ...layout.lyric, x: -6, y: 6 },
     iconOnly: true,
   };
 }
@@ -114,20 +114,12 @@ function iconOnlyLayout(layout, area) {
 function animatedLayout(lyric, settings, side, progress, area = null, size = null) {
   const layout = combinedLayout(lyric, settings, side, 1, area, size);
   const amount = Math.max(0, Math.min(1, progress));
-  const travel = Math.min(1, amount * 2);
-  const easedTravel = travel * travel * (3 - 2 * travel);
-  const growth = Math.max(0, Math.min(1, (amount - .5) * 2));
-  const lyricDot = { x: layout.lyric.x + 16, y: layout.lyric.y + 3 };
-  const panelDot = { x: layout.panel.x + 16, y: layout.panel.y + 6 };
   return {
     ...layout,
     animation: {
       progress: amount,
-      panelScale: growth * growth * (3 - 2 * growth),
-      dot: {
-        x: Math.round(lyricDot.x + (panelDot.x - lyricDot.x) * easedTravel),
-        y: Math.round(lyricDot.y + (panelDot.y - lyricDot.y) * easedTravel),
-      },
+      opacity: amount,
+      dot: { x: layout.lyric.x + 12, y: layout.lyric.y },
     },
   };
 }

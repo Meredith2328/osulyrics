@@ -61,7 +61,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveCo
 
 function updateHitTesting() {
   if (!appWindow || appWindow.isDestroyed()) return;
-  const ignore = !panelOpen && !overlayInteractive && panelProgress > 0 && !animationTimer;
+  const ignore = !overlayShown;
   appWindow.setIgnoreMouseEvents(ignore, ignore ? { forward: true } : undefined);
 }
 
@@ -112,11 +112,10 @@ function setPanelOpen(open, animate = true) {
     return;
   }
   const started = Date.now();
-  const duration = Math.max(100, 480 * Math.abs(target - from));
+  const duration = 167 * Math.abs(target - from);
   const frame = () => {
     const t = Math.min(1, (Date.now() - started) / duration);
-    const eased = t * t * (3 - 2 * t);
-    panelProgress = from + (target - from) * eased;
+    panelProgress = from + (target - from) * t;
     applyLayout();
     if (t >= 1) {
       clearInterval(animationTimer);
@@ -159,6 +158,8 @@ function setOverlayShown(value) {
       applyLayout();
     } else {
       dragSession = resizeSession = null;
+      appWindow.setIgnoreMouseEvents(true);
+      finishAnimation();
       appWindow.hide();
     }
   }
