@@ -270,7 +270,7 @@ class LyricsService {
     const existingLines = this.payload.lines || [];
     this.emit({ status: 'searching', message: '正在搜索带时间戳的歌词…', candidates: [] });
     try {
-      const searches = query ? [{ query }] : automaticSearches(song);
+      const searches = query ? [{ q: query }] : automaticSearches(song);
       const unicodeBase = stripVersionSuffix(song.title);
       const mustTryUnicodeBase = !query && /[\u3040-\u30ff\u3400-\u9fff]/u.test(song.title || '') &&
         unicodeBase.toLowerCase() !== stripVersionSuffix(song.romanizedTitle).toLowerCase();
