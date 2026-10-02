@@ -42,10 +42,16 @@ async function getJson(url, timeoutMs = 10000) {
 }
 
 function fileId(song) {
-  const identity = song.compilation ? `track:${song.artist}:${song.title}` :
-    Number(song.set) > 0 ? `set:${song.set}` : `${song.artist}:${song.title}`;
-  const stableIdentity = identity.normalize('NFKC');
-  return crypto.createHash('sha1').update(song.compilation ? stableIdentity.toLowerCase() : stableIdentity).digest('hex').slice(0, 16);
+  const identityPath = value => typeof value === 'string' && value.trim() && !/^\.\.?$/.test(value.trim())
+    ? value.trim().replace(/\\/g, '/').toLowerCase() : '';
+  const folder = identityPath(song.beatmapFolder);
+  const audio = identityPath(song.audioFile);
+  const scope = folder || (Number(song.set) > 0 ? `set:${song.set}` : '');
+  // Share only a known recording within a known package. Titles/set IDs alone
+  // cannot distinguish imported edits, compilation tracks or reused audio names.
+  const identity = audio && scope ? ['audio-v2', scope, audio] :
+    ['map-v2', scope, song.key || song.id || [song.artist, song.title]];
+  return crypto.createHash('sha1').update(JSON.stringify(identity)).digest('hex').slice(0, 16);
 }
 
 class LyricsService {
