@@ -565,11 +565,12 @@ $('setupButton').addEventListener('click', async () => {
 });
 
 api.onState(next => {
-  const changedSong = state.song?.key !== next.song?.key;
+  const changedSong = state.song?.key !== next.song?.key || state.song?.recordingKey !== next.song?.recordingKey;
   const changedPhase = state.state !== next.state || state.connected !== next.connected;
   const changedMetadata = state.song?.title !== next.song?.title || state.song?.artist !== next.song?.artist;
   if (changedSong || changedPhase) activeIndex = -2;
   if (changedSong) {
+    lyrics = { ...lyrics, lines: [] };
     setView('normal');
     closeSearch();
     candidatePage = 0;

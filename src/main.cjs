@@ -242,6 +242,7 @@ async function pollTosu() {
           send('tosu', { status: tosuStatus, message: '' });
         }
         if (current.connected) {
+          clockSync.reset();
           current = { ...current, connected: false, playing: false, song: null };
           send('state', current);
           lyrics.setSong(null);
@@ -252,6 +253,7 @@ async function pollTosu() {
     }
     const receivedAt = Date.now();
     current = normalizeTosu(await response.json(), receivedAt);
+    if (current.song) current.song.recordingKey = fileId(current.song);
     current.positionMs = clockSync.update({ ...current, key: `${current.song ? fileId(current.song) : ''}|${current.song?.key || ''}|${current.state}` });
     if (current.song?.id === null && current.song.title === 'circles!' && current.song.artist === 'nekodex') current.song = null;
     if (tosuStatus !== 'connected') {
@@ -270,6 +272,7 @@ async function pollTosu() {
       send('tosu', { status: tosuStatus });
     }
     if (current.connected) {
+      clockSync.reset();
       current = { ...current, connected: false, playing: false, song: null };
       send('state', current);
       lyrics.setSong(null);
@@ -388,8 +391,11 @@ ipcMain.handle('edit-lyrics', async () => {
 });
 ipcMain.handle('import-lyrics', async () => {
   if (!lyrics.song) return false;
+  const generation = lyrics.generation;
+  const recordingKey = fileId(lyrics.song);
   const result = await dialog.showOpenDialog(appWindow, { properties: ['openFile'], filters: [{ name: 'LRC 歌词', extensions: ['lrc', 'txt'] }] });
   if (result.canceled || !result.filePaths[0]) return false;
+  if (!lyrics.song || lyrics.generation !== generation || fileId(lyrics.song) !== recordingKey) return false;
   return lyrics.importText(fs.readFileSync(result.filePaths[0], 'utf8'));
 });
 ipcMain.handle('window-action', (_event, action) => {
