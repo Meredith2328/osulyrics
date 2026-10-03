@@ -27,7 +27,8 @@ reducedMotion.addEventListener('change', () => { if (currentLayout) applyLayout(
 function renderPresence() {
   document.body.hidden = !shown;
   document.body.inert = !shown;
-  if (!shown) setEditing(false);
+  if (!shown) { cancelGestures(); setEditing(false); }
+  else queueLyricMeasure();
   if (currentLayout) applyLayout(currentLayout);
 }
 
@@ -359,6 +360,14 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
+const gestureGate = window.osuGestureGate.create(api, () => {
+  // The host ignores measurements during gestures; resend after cleanup.
+  // A hidden document has no measurable content; defer that resend until show.
+  lastReportedHeight = -1;
+  if (shown) queueLyricMeasure();
+});
+const iconGestureFinishes = [];
+let lyricLease = null, panelDragLease = null, panelResizeLease = null;
 let pointerId = null;
 let gestureMode = null;
 let gestureOrigin = null;
@@ -378,7 +387,8 @@ function finishPanelDrag() {
   const id = panelPointerId;
   panelPointerId = null;
   if (id !== null && header.hasPointerCapture(id)) header.releasePointerCapture(id);
-  if (panelDragActive) api.overlayDragEnd();
+  panelDragLease?.cancel();
+  panelDragLease = null;
   panelDragActive = false;
   panelGestureOrigin = null;
   panelMoved = false;
@@ -386,14 +396,18 @@ function finishPanelDrag() {
 }
 
 $('panelHeader').addEventListener('pointerdown', async event => {
-  if (locked || event.button !== 0 || event.target.closest('button')) return;
+  if (!shown || locked || event.button !== 0 || event.target.closest('button')) return;
+  const lease = gestureGate.reserve('drag');
+  if (!lease) return;
+  panelDragLease = lease;
   event.preventDefault();
   panelPointerId = event.pointerId;
   panelGestureOrigin = { x: event.screenX, y: event.screenY };
   panelMoved = false;
   const header = $('panelHeader');
   header.setPointerCapture(panelPointerId);
-  const started = await api.overlayDragStart(panelGestureOrigin);
+  const started = await lease.start(panelGestureOrigin);
+  if (panelDragLease !== lease) return;
   if (panelPointerId !== event.pointerId || !started) { finishPanelDrag(); return; }
   panelDragActive = true;
   header.classList.add('dragging');
@@ -411,7 +425,8 @@ function finishPanelResize() {
   const id = panelResizePointerId;
   panelResizePointerId = null;
   if (id !== null && panelResizeTarget?.hasPointerCapture(id)) panelResizeTarget.releasePointerCapture(id);
-  if (panelResizeActive) api.overlayResizeEnd();
+  panelResizeLease?.cancel();
+  panelResizeLease = null;
   panelResizeOrigin = null;
   panelResizeTarget = null;
   panelResizeActive = false;
@@ -420,14 +435,18 @@ function finishPanelResize() {
 
 $('panelResizeHandles').addEventListener('pointerdown', async event => {
   const handle = event.target.closest('.panel-resize-handle')?.dataset.handle;
-  if (!handle || locked || event.button !== 0) return;
+  if (!handle || !shown || locked || event.button !== 0) return;
+  const lease = gestureGate.reserve('resize');
+  if (!lease) return;
+  panelResizeLease = lease;
   event.preventDefault();
   panelResizePointerId = event.pointerId;
   panelResizeOrigin = { x: event.screenX, y: event.screenY };
   panelResizeTarget = event.target;
   panelResizeMoved = false;
   panelResizeTarget.setPointerCapture(panelResizePointerId);
-  const started = await api.overlayResizeStart({ handle, source: 'panel', ...panelResizeOrigin });
+  const started = await lease.start({ handle, source: 'panel', ...panelResizeOrigin });
+  if (panelResizeLease !== lease) return;
   if (panelResizePointerId !== event.pointerId || !started) { finishPanelResize(); return; }
   panelResizeActive = true;
 });
@@ -446,26 +465,26 @@ function finishGesture() {
   if (moved) { suppressClick = true; setTimeout(() => { suppressClick = false; }, 250); }
   moved = false;
   if (id !== null && $('lyricBox').hasPointerCapture(id)) $('lyricBox').releasePointerCapture(id);
-  if (gestureMode === 'resize') api.overlayResizeEnd();
-  else if (gestureMode === 'drag') api.overlayDragEnd();
-  if (gestureMode === 'resize') {
-    lastReportedHeight = -1;
-    queueLyricMeasure();
-  }
+  lyricLease?.cancel();
+  lyricLease = null;
   gestureMode = null;
   gestureOrigin = null;
 }
 
 $('lyricBox').addEventListener('pointerdown', async event => {
-  if (locked || event.button !== 0) return;
-  event.preventDefault();
+  if (!shown || locked || event.button !== 0) return;
   const handle = event.target.closest('.resize-handle')?.dataset.handle;
+  const lease = gestureGate.reserve(handle ? 'resize' : 'drag');
+  if (!lease) return;
+  lyricLease = lease;
+  event.preventDefault();
   pointerId = event.pointerId;
   gestureOrigin = { x: event.screenX, y: event.screenY };
   moved = false;
   $('lyricBox').setPointerCapture(pointerId);
-  const started = handle ? await api.overlayResizeStart({ handle, ...gestureOrigin }) : await api.overlayDragStart(gestureOrigin);
-  if (pointerId !== event.pointerId || !started) { api.overlayDragEnd(); api.overlayResizeEnd(); return; }
+  const started = await lease.start(handle ? { handle, ...gestureOrigin } : gestureOrigin);
+  if (lyricLease !== lease) return;
+  if (pointerId !== event.pointerId || !started) { finishGesture(); return; }
   gestureMode = handle ? 'resize' : 'drag';
 });
 $('lyricBox').addEventListener('pointermove', event => {
@@ -492,13 +511,14 @@ $('lyricBox').addEventListener('keydown', event => {
 
 function bindIconDrag(id, opensPanel) {
   const button = $(id);
-  let pointerId = null, origin = null, active = false, moved = false, suppressClick = false;
+  let pointerId = null, origin = null, active = false, moved = false, suppressClick = false, iconLease = null;
   function finish() {
     if (pointerId === null) return;
     const captured = pointerId;
     pointerId = null;
     if (button.hasPointerCapture(captured)) button.releasePointerCapture(captured);
-    if (active) api.overlayDragEnd();
+    iconLease?.cancel();
+    iconLease = null;
     if (moved) {
       suppressClick = true;
       setTimeout(() => { suppressClick = false; }, 250);
@@ -507,15 +527,19 @@ function bindIconDrag(id, opensPanel) {
     active = moved = false;
     button.classList.remove('dragging');
   }
+  iconGestureFinishes.push(finish);
   button.addEventListener('pointerdown', async event => {
-    if (locked || event.button !== 0) return;
+    if (!shown || locked || event.button !== 0) return;
+    const lease = gestureGate.reserve('drag');
+    if (!lease) return;
+    iconLease = lease;
     event.preventDefault();
     pointerId = event.pointerId;
     origin = { x: event.screenX, y: event.screenY };
     button.setPointerCapture(pointerId);
-    const started = await api.overlayDragStart({ ...origin, source: 'icon' });
-    if (pointerId !== event.pointerId) { if (started) api.overlayDragEnd(); return; }
-    if (!started) { finish(); return; }
+    const started = await lease.start({ ...origin, source: 'icon' });
+    if (iconLease !== lease) return;
+    if (pointerId !== event.pointerId || !started) { finish(); return; }
     active = true;
   });
   button.addEventListener('pointermove', event => {
@@ -533,6 +557,13 @@ function bindIconDrag(id, opensPanel) {
     api.panelToggle(opensPanel === null ? !panelOpen : opensPanel);
   });
 }
+function cancelGestures() {
+  finishPanelDrag();
+  finishPanelResize();
+  finishGesture();
+  for (const finish of iconGestureFinishes) finish();
+}
+window.addEventListener('blur', cancelGestures);
 bindIconDrag('brandToggle', false);
 bindIconDrag('collapsedToggle', null);
 $('lockButton').addEventListener('click', () => api.overlayLock(!locked));
@@ -615,9 +646,9 @@ api.onLyrics(next => {
   else if (['ready', 'choose', 'error'].includes(next.status) && !next.candidates?.length) showCandidatesAfterSearch = false;
 });
 api.onTosu(next => { tosu = { ...tosu, ...next }; renderStatus(); });
-api.onOverlaySettings(next => { locked = next.locked; settings = next.settings; lastReportedHeight = -1; renderControls(); renderStyle(); });
+api.onOverlaySettings(next => { locked = next.locked; if (locked) cancelGestures(); settings = next.settings; lastReportedHeight = -1; renderControls(); renderStyle(); });
 api.onOverlayPresence(next => { shown = next.shown; renderPresence(); renderControls(); renderCollapsedToggle(); });
-api.onPanelState(next => { panelOpen = next.open; panelSide = next.side; if (!panelOpen) { setView('normal'); setEditing(false); } renderControls(); renderCollapsedToggle(); if (currentLayout) applyLayout(currentLayout); });
+api.onPanelState(next => { panelOpen = next.open; panelSide = next.side; if (!panelOpen) { cancelGestures(); setView('normal'); setEditing(false); } renderControls(); renderCollapsedToggle(); if (currentLayout) applyLayout(currentLayout); });
 api.onLayout(applyLayout);
 
 buildPresetSwatches();
