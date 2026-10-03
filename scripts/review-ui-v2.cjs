@@ -10,6 +10,7 @@ const http = require('node:http');
 const out = path.resolve(process.argv[2] || '/workspace/ui-v2-evidence');
 fs.mkdirSync(out, { recursive: true });
 const checks = [];
+const geometrySnapshots = [];
 const record = (name, value = true) => { assert.ok(value, name); checks.push(name); };
 const layout = (width=560,height=420,progress=1,side='above') => {
   const value=animatedLayout({x:32,y:470,width:700,height:100},DEFAULT_OVERLAY_SETTINGS,side,progress,null,{width,height});
@@ -34,7 +35,7 @@ try {
  const page=await browser.newPage({viewport:{width:800,height:650},deviceScaleFactor:1,bypassCSP:true});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(initial=>{
-  const callbacks={},calls=[];let currentLayout=initial.layout,settings=initial.overlay.settings;window.review={callbacks,calls,initial};
+  const callbacks={},calls=[];let currentLayout=initial.layout,settings=initial.overlay.settings;window.review={callbacks,calls,initial,getLayout:()=>structuredClone(currentLayout)};
   const api={initial:async()=>initial};
   for(const name of ['State','Lyrics','Tosu','OverlaySettings','OverlayPresence','PanelState','Layout'])api['on'+name]=cb=>callbacks[name]=value=>{if(name==='Layout')currentLayout=value;if(name==='OverlaySettings')settings=value.settings;cb(value);};
   for(const name of ['installTosu','startTosu','searchLyrics','refreshLyrics','refreshTranslation','chooseLyrics','offset','editLyrics','importLyrics','windowAction','panelToggle','overlayLock','overlayShow','updateOverlaySettings','overlayVisibility','overlayContentHeight','overlayDragStart','overlayDragMove','overlayDragEnd','overlayResizeStart','overlayResizeMove','overlayResizeEnd'])api[name]=async(...args)=>{calls.push({name,args});return true;};
@@ -49,8 +50,28 @@ try {
  await page.waitForFunction(()=>document.querySelector('#sourceLabel').textContent==='歌词已就绪');
  await page.evaluate(()=>document.fonts.ready);
  await page.addStyleTag({content:'body { background: #17151f; }'});
- const emit=async(name,value)=>page.evaluate(({name,value})=>window.review.callbacks[name](value),{name,value});
- const snap=async name=>{await page.mouse.move(790,640);await page.waitForTimeout(100);await page.screenshot({path:path.join(out,name+'.png')});};
+ const emit=async(name,value)=>{
+  if(name==='Layout') {
+   // Like the real host's lyricBounds, retain renderer height feedback across
+   // panel size/opacity changes. A fresh fixture must not reset it to 100px.
+   const current=await page.evaluate(()=>review.getLayout());
+   value={...value,lyric:{...value.lyric,height:current.lyric.height}};
+  }
+  return page.evaluate(({name,value})=>window.review.callbacks[name](value),{name,value});
+ };
+ const snap=async name=>{
+  await page.mouse.move(790,640);await page.waitForTimeout(100);
+  const geometry=await page.evaluate(()=>{
+   const box=document.querySelector('#lyricBox');
+   if(box.hidden)return {visible:false,contained:true};
+   const bounds=box.getBoundingClientRect();
+   const lines=['original','translation'].map(id=>document.getElementById(id)).filter(e=>!e.hidden).map(e=>({id:e.id,...e.getBoundingClientRect().toJSON()}));
+   return {visible:true,box:bounds.toJSON(),lines,contained:lines.every(r=>r.left>=bounds.left&&r.right<=bounds.right+1&&r.top>=bounds.top&&r.bottom<=bounds.bottom+1)};
+  });
+  record(`snapshot ${name}: lyric content fits its surface`,geometry.contained);
+  geometrySnapshots.push({name,...geometry});
+  await page.screenshot({path:path.join(out,name+'.png')});
+ };
  const box=async id=>page.locator('#'+id).boundingBox();
  const fit=async name=>{
   const issues=await page.evaluate(()=>{
@@ -63,14 +84,15 @@ try {
  record('complete translation disables refresh',await page.locator('#refreshTranslationButton').isDisabled());
  record('orb visual32 target44',await page.evaluate(()=>document.querySelector('#collapsedToggle').offsetWidth===44&&document.querySelector('#collapsedToggle span').offsetWidth===32));
  record('lyric text usable width620',await page.evaluate(()=>{const e=document.querySelector('#lyricBox'),s=getComputedStyle(e);return e.clientWidth-parseFloat(s.paddingLeft)-parseFloat(s.paddingRight)===620;}));
- const originalRect=await box('original'),orbRect=await box('collapsedToggle'),panelRect=await box('panelClip');
+ const lyricRect=await box('lyricBox'),originalRect=await box('original'),orbRect=await box('collapsedToggle'),panelRect=await box('panelClip');
  await emit('PanelState',{open:false,side:'above'});
  for(const [name,progress] of [['02-motion-83ms',83/167],['03-collapsed',0]]) {
   await emit('Layout',layout(560,420,progress));await snap(name);
+  assert.deepEqual(await box('lyricBox'),lyricRect);
   assert.deepEqual(await box('original'),originalRect);assert.deepEqual(await box('collapsedToggle'),orbRect);
   if(progress>0)assert.deepEqual(await box('panelClip'),panelRect);
  }
- record('collapse and midfade preserve lyric/orb bounds');
+ record('collapse and midfade preserve complete lyric surface and orb bounds');
  record('collapsed panel absent from focus/hit tree',await page.locator('#panelClip').evaluate(e=>e.hidden&&e.inert));
  await page.locator('#collapsedToggle').click();
  record('orb opens current closed intent',await page.evaluate(()=>review.calls.filter(x=>x.name==='panelToggle').at(-1).args[0]===true));
@@ -134,7 +156,7 @@ try {
   for(const preset of ['clear','sakura','focus']){await emit('OverlaySettings',{locked:false,settings:{...initial.overlay.settings,...require('../src/appearance-presets.js').presetPatch(preset)}});await snap(`13-material-${name}-${preset}`);}
  }
  record('no renderer exceptions',errors.length===0);
- fs.writeFileSync(path.join(out,'browser-results.json'),JSON.stringify({scope:'Headless Chromium production renderer with API double; no Electron/IPC/Windows execution',checks,errors},null,2));
+ fs.writeFileSync(path.join(out,'browser-results.json'),JSON.stringify({scope:'Headless Chromium production renderer with API double; no Electron/IPC/Windows execution',checks,errors,geometrySnapshots},null,2));
  console.log(JSON.stringify({passed:checks.length,errors,out},null,2));
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1});
