@@ -99,6 +99,11 @@ function setPanelOpen(open, animate = true) {
   animationTimer = null;
   const from = panelProgress;
   if (open && from === 0) {
+    const previous = presentLayout();
+    if (previous.iconOnly) {
+      // The compact window may be clamped; keep its visible orb as the anchor.
+      lyricBounds = { ...lyricBounds, x: previous.window.x + previous.lyric.x, y: previous.window.y + previous.lyric.y };
+    }
     const area = screen.getDisplayMatching(lyricBounds).workArea;
     panelSide = choosePanelSide(lyricBounds, area, overlaySettings, panelSize);
     lyricBounds = fitLyricForPanel(lyricBounds, area, overlaySettings, panelSide, panelSize);

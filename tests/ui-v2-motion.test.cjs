@@ -11,7 +11,7 @@ function fixture() {
     overlayShown:true,dragSession:{},resizeSession:{},LYRICS_HOTKEY:'test',hotkeyRegistered:true,
     screen:{getDisplayMatching:()=>({workArea:{}})},choosePanelSide:()=> 'above',fitLyricForPanel:b=>b,
     Date:{now:()=>now},setInterval:fn=>{interval=fn;return 1},clearInterval:()=>{interval=null},
-    send:(...args)=>events.push(args),scheduleSave:()=>{},updateTrayMenu:()=>{},applyLayout:()=>frames.push(ctx.panelProgress)};
+    send:(...args)=>events.push(args),scheduleSave:()=>{},updateTrayMenu:()=>{},presentLayout:()=>({iconOnly:false}),applyLayout:()=>frames.push(ctx.panelProgress)};
   const fn = name => source.slice(source.indexOf(`function ${name}(`), source.indexOf('\nfunction ',source.indexOf(`function ${name}(`)+1));
   vm.createContext(ctx);
   vm.runInContext(fn('finishAnimation')+fn('setPanelOpen')+fn('setOverlayShown'),ctx);
