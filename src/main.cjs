@@ -138,15 +138,18 @@ function showControl() {
   setPanelOpen(true);
 }
 
-function updateTrayMenu() {
-  if (!tray) return;
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: overlayShown ? '隐藏osu!lyrics' : '显示osu!lyrics', click: () => setOverlayShown(!overlayShown) },
+function buildSettingsMenu() {
+  return Menu.buildFromTemplate([
+    { label: overlayShown ? '完全隐藏 osu!lyrics' : '显示osu!lyrics', click: () => setOverlayShown(!overlayShown) },
     { label: '打开设置', click: showControl },
     { label: overlayLocked ? '解锁位置' : '锁定位置', click: () => setOverlayLock(!overlayLocked) },
     { type: 'separator' },
     { label: '退出', click: () => { exitRequested = true; app.quit(); } },
-  ]));
+  ]);
+}
+
+function updateTrayMenu() {
+  if (tray) tray.setContextMenu(buildSettingsMenu());
 }
 
 function setOverlayShown(value) {
@@ -408,6 +411,18 @@ ipcMain.handle('window-action', (_event, action) => {
   return true;
 });
 ipcMain.handle('panel-toggle', (_event, open) => { setPanelOpen(!!open); return panelOpen; });
+ipcMain.handle('settings-menu', (event, position) => {
+  if (!appWindow || appWindow.isDestroyed() || event.sender !== appWindow.webContents || !overlayShown || !panelOpen) return false;
+  const x = position?.x, y = position?.y;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const bounds = appWindow.getBounds();
+  buildSettingsMenu().popup({
+    window: appWindow,
+    x: Math.round(Math.max(0, Math.min(bounds.width - 1, x))),
+    y: Math.round(Math.max(0, Math.min(bounds.height - 1, y))),
+  });
+  return true;
+});
 ipcMain.handle('overlay-lock', (_event, locked) => setOverlayLock(locked));
 ipcMain.handle('overlay-show', (_event, shown) => setOverlayShown(shown));
 ipcMain.handle('overlay-settings-update', (_event, patch) => {

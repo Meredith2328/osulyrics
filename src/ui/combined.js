@@ -182,13 +182,13 @@ function renderControls() {
   $('panelHeader').classList.toggle('drag-locked', locked);
   $('panelSurface').classList.toggle('locked', locked);
   for (const id of ['brandToggle', 'collapsedToggle']) $(id).classList.toggle('draggable', !locked);
-  $('brandToggle').title = locked ? '收起设置' : '拖动移动位置；点击收起设置';
+  $('brandToggle').title = locked ? '收起 osu!lyrics' : '拖动移动位置；点击收起 osu!lyrics';
+  $('brandToggle').setAttribute('aria-expanded', String(panelOpen));
   const toggleLabel = panelOpen ? '收起 osu!lyrics' : '展开 osu!lyrics';
   $('collapsedToggle').title = locked ? toggleLabel : `拖动移动位置；点击${toggleLabel}`;
   $('collapsedToggle').setAttribute('aria-label', toggleLabel);
   $('collapsedToggle').setAttribute('aria-expanded', String(panelOpen));
   $('styleButton').disabled = locked;
-  $('visibilityButton').textContent = shown ? '隐藏' : '显示';
   if (locked && view === 'style') setView('normal');
   const box = $('lyricBox');
   box.classList.toggle('locked', locked);
@@ -567,8 +567,10 @@ window.addEventListener('blur', cancelGestures);
 bindIconDrag('brandToggle', false);
 bindIconDrag('collapsedToggle', null);
 $('lockButton').addEventListener('click', () => api.overlayLock(!locked));
-$('visibilityButton').addEventListener('click', () => {
-  shown = false; renderPresence(); api.overlayShow(false);
+$('settingsButton').addEventListener('click', () => {
+  cancelGestures();
+  const bounds = $('settingsButton').getBoundingClientRect();
+  api.settingsMenu({ x: bounds.left, y: bounds.bottom });
 });
 $('styleButton').addEventListener('click', () => setView('style'));
 $('backButton').addEventListener('click', () => setView('normal'));

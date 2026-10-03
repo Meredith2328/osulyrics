@@ -26,10 +26,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .identity { min-width: 0; gap: 4px; }
 .brand-name { font-size: 14px; font-weight: 700; white-space: nowrap; }
 .phase-badge { margin-left: 20px; padding: 4px 8px; border-radius: 6px; color: var(--muted); background: var(--surface-raised); font-size: 12px; line-height: 16px; white-space: nowrap; }
-.brand-dot, .header-navigation, .header-lock, .header-visibility { height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; font-size: 14px; font-weight: 600; }
+.brand-dot, .header-navigation, .header-lock, .header-settings { height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; font-size: 14px; font-weight: 600; -webkit-app-region: no-drag; }
 .brand-dot, .header-lock { width: 36px; padding: 8px; flex: none; }
-.brand-dot { width: 28px; padding: 4px; color: var(--muted); }
-.brand-dot svg, .header-lock svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.brand-dot, .header-settings { width: 28px; padding: 4px; color: var(--muted); flex: none; }
+.brand-dot svg, .header-lock svg, .header-settings svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .header-actions { gap: 4px; }
 .header-navigation { min-width: 72px; }
 .header-lock .lock-closed, .header-lock.selected .lock-open { display: none; }

@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('osuLyrics', {
   importLyrics: () => ipcRenderer.invoke('import-lyrics'),
   windowAction: (action, value) => ipcRenderer.invoke('window-action', action, value),
   panelToggle: open => ipcRenderer.invoke('panel-toggle', open),
+  settingsMenu: position => ipcRenderer.invoke('settings-menu', position),
   overlayLock: locked => ipcRenderer.invoke('overlay-lock', locked),
   overlayShow: shown => ipcRenderer.invoke('overlay-show', shown),
   updateOverlaySettings: patch => ipcRenderer.invoke('overlay-settings-update', patch),
