@@ -38,7 +38,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .brand-dot.draggable, .collapsed-toggle.draggable { cursor: grab; touch-action: none; }
 .brand-dot.dragging, .collapsed-toggle.dragging { cursor: grabbing; }
 .collapsed-toggle { position: absolute; z-index: 30; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--accent); }
-.collapsed-toggle span { width: 32px; height: 32px; display: grid; place-items: center; border: 2px solid #fff; border-radius: 50%; background: linear-gradient(145deg, #ff8abd, #ed579d); color: #fff; font-family: 'Segoe UI Symbol', sans-serif; font-size: 23px; line-height: 1; }
+.collapsed-toggle span { width: 32px; height: 32px; display: grid; place-items: center; border: 2px solid #fff; border-radius: 50%; background: linear-gradient(145deg, #ff8abd, #ed579d); color: #fff; }
+.collapsed-toggle svg { display: block; width: 24px; height: 24px; fill: currentColor; pointer-events: none; }
 .collapsed-toggle:hover span { background: linear-gradient(145deg, #ffa0cb, #f36bab); }
 .panel-view { height: calc(100% - 44px); padding: 16px 20px 18px; }
 .normal-view, .style-view, .candidate-view { display: flex; flex-direction: column; }
