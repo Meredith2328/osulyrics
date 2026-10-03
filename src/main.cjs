@@ -25,6 +25,7 @@ if (!singleInstance) app.quit();
 let appWindow;
 let tray;
 let lyrics;
+let importRequestId = 0;
 let current = { connected: false, state: '', song: null, positionMs: 0, sampledAt: Date.now(), playing: false };
 let tosuStatus = 'disconnected';
 let launchAttempted = false;
@@ -391,12 +392,13 @@ ipcMain.handle('edit-lyrics', async () => {
   return !!file;
 });
 ipcMain.handle('import-lyrics', async () => {
+  const requestId = ++importRequestId;
   if (!lyrics.song) return false;
   const generation = lyrics.generation;
   const recordingKey = fileId(lyrics.song);
   const result = await dialog.showOpenDialog(appWindow, { properties: ['openFile'], filters: [{ name: 'LRC 歌词', extensions: ['lrc', 'txt'] }] });
   if (result.canceled || !result.filePaths[0]) return false;
-  if (!lyrics.song || lyrics.generation !== generation || fileId(lyrics.song) !== recordingKey) return false;
+  if (requestId !== importRequestId || !lyrics.song || lyrics.generation !== generation || fileId(lyrics.song) !== recordingKey) return false;
   return lyrics.importText(fs.readFileSync(result.filePaths[0], 'utf8'));
 });
 ipcMain.handle('window-action', (_event, action) => {
