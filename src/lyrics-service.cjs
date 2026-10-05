@@ -65,6 +65,14 @@ function fileId(song) {
   return crypto.createHash('sha1').update(JSON.stringify(identity)).digest('hex').slice(0, 16);
 }
 
+// 0.4.12 及更早的缓存名：按曲包（合集按艺术家+曲名）区分，不区分同一曲包里的不同录音。
+function legacyFileId(song) {
+  const identity = song.compilation ? `track:${song.artist}:${song.title}` :
+    Number(song.set) > 0 ? `set:${song.set}` : `${song.artist}:${song.title}`;
+  const stableIdentity = identity.normalize('NFKC');
+  return crypto.createHash('sha1').update(song.compilation ? stableIdentity.toLowerCase() : stableIdentity).digest('hex').slice(0, 16);
+}
+
 class LyricsService {
   constructor(folder, onUpdate, options = {}) {
     this.folder = folder;
@@ -87,6 +95,20 @@ class LyricsService {
   paths() {
     const id = fileId(this.song);
     return { lrc: path.join(this.folder, `${id}.lrc`), meta: path.join(this.folder, `${id}.json`) };
+  }
+
+  // 新缓存名下还没有文件时，复制一份旧缓存过来，保住以前导入/编辑的歌词和校时。
+  // 旧文件保留：同一曲包的其他录音仍可各自继承。
+  adoptLegacyCache() {
+    const target = this.paths();
+    if (fs.existsSync(target.lrc) || fs.existsSync(target.meta)) return false;
+    const legacy = legacyFileId(this.song);
+    let adopted = false;
+    for (const [ext, to] of [['lrc', target.lrc], ['json', target.meta]]) {
+      const from = path.join(this.folder, `${legacy}.${ext}`);
+      if (fs.existsSync(from)) { fs.copyFileSync(from, to); adopted = true; }
+    }
+    return adopted;
   }
 
   emit(patch) {
@@ -177,6 +199,7 @@ class LyricsService {
       return;
     }
     const generation = this.generation;
+    this.adoptLegacyCache();
     const paths = this.paths();
     const meta = this.readMeta();
     this.emit({ status: 'loading', lines: [], candidates: [], offsetMs: Number(meta.offsetMs) || 0, source: '', translationSource: '', message: '', selectionMode: '', machineTranslationIndexes: [] });
@@ -466,4 +489,4 @@ class LyricsService {
   }
 }
 
-module.exports = { LyricsService, fileId, stripVersionSuffix };
+module.exports = { LyricsService, fileId, legacyFileId, stripVersionSuffix };
