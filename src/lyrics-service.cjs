@@ -12,6 +12,17 @@ function stripVersionSuffix(value) {
     .replace(/\s*[([]\s*(?:tv\s*size|short\s*(?:ver(?:sion)?|edit)|game\s*ver(?:sion)?)\s*[)\]]\s*$/i, '').trim();
 }
 
+function isKnownWrongContent(song, lines) {
+  // LRCLIB's Idol entries include a confirmed Mesmerizer body, under multiple
+  // IDs/durations. Match that content only for the affected song, not its IDs.
+  const artist = String(song?.artist || song?.romanizedArtist || '').normalize('NFKC').trim().toLowerCase();
+  const titles = [song?.title, song?.romanizedTitle].map(value => stripVersionSuffix(value).toLowerCase());
+  if (artist !== 'yoasobi' || !titles.some(value => value === 'idol' || value === 'アイドル')) return false;
+  const originals = (lines || []).filter(line => line.original).map(line => line.original);
+  return crypto.createHash('sha256').update(JSON.stringify(originals)).digest('hex') ===
+    '3c517a6581e7fec384eb05e59392bd534f8dd133a3c25b6ea422cce55285a2a6';
+}
+
 function automaticSearches(song) {
   const variants = [
     [song.romanizedTitle || song.title, song.romanizedArtist || song.artist],
@@ -110,6 +121,7 @@ class LyricsService {
 
   cachedAutoNeedsReview(meta, song, lines) {
     if (meta.source !== 'LRCLIB' || !this.automaticLyricsMayChange(meta)) return false;
+    if (isKnownWrongContent(song, lines)) return true;
     const knownDuration = Number(meta.audioDurationMs);
     const currentDuration = Number(song?.durationMs);
     const durationMismatch = knownDuration > 0 && currentDuration > 0 &&
@@ -206,12 +218,19 @@ class LyricsService {
     let contents;
     try { contents = fs.readFileSync(this.paths().lrc, 'utf8'); }
     catch { return false; }
-    if (contents === this.lastWritten) return true;
     const lines = parseLrc(contents);
     if (!lines.length) return false;
+    const meta = this.readMeta();
+    if (!edited && meta.source === 'LRCLIB' && this.automaticLyricsMayChange(meta) &&
+        isKnownWrongContent(this.song, lines)) {
+      // Remember the disk text so refresh does not promote this rejected cache
+      // to a manual edit. Leave the file intact until a valid source replaces it.
+      this.lastWritten = contents;
+      return false;
+    }
+    if (contents === this.lastWritten) return true;
     if (edited) { this.searchRun++; this.selectionToken++; }
     this.lastWritten = contents;
-    const meta = this.readMeta();
     if (edited) this.writeMeta({ source: '本地编辑', selectionMode: 'manual',
       translationSource: lines.some(l => l.translation) ? '本地编辑' : '', machineTranslationIndexes: [] });
     this.emit({ status: 'ready', lines, source: edited ? '本地编辑' : meta.source || '本地 LRC',
@@ -275,6 +294,11 @@ class LyricsService {
       const mustTryUnicodeBase = !query && /[\u3040-\u30ff\u3400-\u9fff]/u.test(song.title || '') &&
         unicodeBase.toLowerCase() !== stripVersionSuffix(song.romanizedTitle).toLowerCase();
       const all = new Map();
+      let rejectedKnownWrong = false;
+      const addCandidate = item => {
+        if (isKnownWrongContent(song, parseLrc(item.syncedLyrics))) rejectedKnownWrong = true;
+        else all.set(item.id, item);
+      };
       let lastError = null;
       let attemptedTitleOnly = false;
       let triedUnicodeBase = false;
@@ -286,7 +310,7 @@ class LyricsService {
           const url = new URL('search', this.lrclibBase);
           for (const [key, value] of Object.entries(params)) if (value) url.searchParams.set(key, value);
           const found = await this.requestLyrics(url, { signal: abort.signal });
-          for (const item of Array.isArray(found) ? found : []) all.set(item.id, item);
+          for (const item of Array.isArray(found) ? found : []) addCandidate(item);
           if ((!mustTryUnicodeBase || triedUnicodeBase) &&
               (all.size >= 8 || (autoSelect && chooseAutomaticMatch(song, [...all.values()])))) break;
           await this.wait(350, undefined, { signal: abort.signal });
@@ -303,7 +327,7 @@ class LyricsService {
         titleOnly.searchParams.set('track_name', stripVersionSuffix(song.title) || stripVersionSuffix(song.romanizedTitle));
         try {
           const found = await this.requestLyrics(titleOnly, { signal: abort.signal, maxAttempts: 2 });
-          for (const item of Array.isArray(found) ? found : []) all.set(item.id, item);
+          for (const item of Array.isArray(found) ? found : []) addCandidate(item);
         } catch (error) { lastError = error; }
       }
       if (generation !== this.generation || searchRun !== this.searchRun) return;
@@ -314,8 +338,20 @@ class LyricsService {
         exact.searchParams.set('artist_name', song.romanizedArtist || song.artist);
         try {
           const item = await this.requestLyrics(exact, { signal: abort.signal, maxAttempts: 2 });
-          if (item?.id) all.set(item.id, item);
+          if (item?.id) addCandidate(item);
         } catch (error) { if (!(error instanceof HttpError && error.status === 404)) lastError = error; }
+      }
+      if (generation !== this.generation || searchRun !== this.searchRun) return;
+      if (!query && rejectedKnownWrong) {
+        // The affected exact-title records are corrupt. Reuse the documented
+        // manual-search route to obtain alternatives before applying old scores.
+        const alternate = new URL('search', this.lrclibBase);
+        alternate.searchParams.set('q', [song.romanizedArtist || song.artist,
+          stripVersionSuffix(song.romanizedTitle || song.title)].filter(Boolean).join(' '));
+        try {
+          const found = await this.requestLyrics(alternate, { signal: abort.signal, maxAttempts: 2 });
+          for (const item of Array.isArray(found) ? found : []) addCandidate(item);
+        } catch (error) { lastError = error; }
       }
       if (generation !== this.generation || searchRun !== this.searchRun) return;
       if (metadataRevision !== this.metadataRevision) return this.search(query, generation, options);
@@ -337,9 +373,12 @@ class LyricsService {
   async select(id, generation = this.generation, selectionMode = 'manual') {
     const item = this.candidates.find(candidate => candidate.id === Number(id));
     if (!item || generation !== this.generation) return false;
+    const lines = parseLrc(item.syncedLyrics);
+    if (!lines.length || isKnownWrongContent(this.song, lines)) return false;
     const meta = this.readMeta();
     if (selectionMode === 'auto' && meta.source === 'LRCLIB' &&
-        Number(meta.selectedId) === Number(item.id) && this.payload.lines?.length) {
+        Number(meta.selectedId) === Number(item.id) && this.payload.lines?.length &&
+        !isKnownWrongContent(this.song, this.payload.lines)) {
       this.writeMeta({ selectionMode: 'auto', audioDurationMs: Number(this.song.durationMs) || 0,
         lyricsDurationMs: Math.round(Number(item.duration) * 1000) || 0 });
       this.emit({ status: 'ready', source: 'LRCLIB', selectionMode: 'auto', message: '' });
@@ -347,8 +386,6 @@ class LyricsService {
     }
     this.searchRun++;
     const selectionToken = ++this.selectionToken;
-    const lines = parseLrc(item.syncedLyrics);
-    if (!lines.length) return false;
     this.lastWritten = serializeLrc(lines);
     fs.writeFileSync(this.paths().lrc, this.lastWritten, 'utf8');
     this.writeMeta({ source: 'LRCLIB', selectedId: item.id, selectionMode, machineTranslationIndexes: [],
